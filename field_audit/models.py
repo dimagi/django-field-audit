@@ -23,12 +23,16 @@ def check_engine_sqlite(engine=None):
         return engine.split(".")[-1][:6] in {"sqlite", "oracle"}
     if engine is None:
         for db_properties in settings.DATABASES.values():
-            # tests only run on postgres _or_ sqlite, never both
+            # The following "no branch" directive prevents coverage from
+            # reporting the (known) untested branch of
+            # `if lite_it_up(...)->return`. There will always be an uncovered
+            # branch here because tests only run on postgres _or_ sqlite, never
+            # both.
             if lite_it_up(db_properties["ENGINE"]):  # pragma: no branch
                 return True
     else:
         return lite_it_up(engine)
-    # tests only run on postgres _or_ sqlite, never both
+    # "no cover" note: tests only run on postgres _or_ sqlite, never both
     return False  # pragma: no cover
 
 
@@ -42,12 +46,12 @@ class AuditEventManager(models.Manager):
         If other DB flavors are configured in Django settings, support is
         defined at import time (see below)
         """
-        # tests only run on postgres _or_ sqlite, never both
+        # "no cover" note: tests only run on postgres _or_ sqlite, never both
         return self.filter(  # pragma: no cover
             changed_by__contains={"user_type": user_type, "username": username},
         )
 
-    # tests only run on postgres _or_ sqlite, never both
+    # "no branch" note: tests only run on postgres _or_ sqlite, never both
     if check_engine_sqlite():  # pragma: no branch
         _by_type_and_username = by_type_and_username
 
@@ -65,7 +69,8 @@ class AuditEventManager(models.Manager):
                     changed_by__user_type=user_type,
                     changed_by__username=username,
                 )
-            # tests only run on postgres _or_ sqlite, never both
+            # "no cover" note: tests only run on postgres _or_ sqlite, never
+            # both
             return self._by_type_and_username(user_type, username)  # pragma: no cover  # noqa: E501
 
 
@@ -226,7 +231,7 @@ class AuditEvent(models.Model):
             if event is None:
                 return cls(
                     object_class_path=get_fqcn(type(instance)),
-                    object_pk=None if object_pk is None else object_pk,
+                    object_pk=object_pk,
                     changed_by=audit_dispatcher.dispatch(request),
                     is_create=is_create,
                     is_delete=is_delete,
