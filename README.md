@@ -1,12 +1,13 @@
 # Audit Field Changes on Django Models
 
 [![tests][tests_badge]][tests_link]
-![coverage][coverage_badge]
+[![coverage][coverage_badge]][coverage_link]
 [![pypi package][pypi_badge]][pypi_link]
 
 [tests_badge]: https://github.com/dimagi/django-field-audit/actions/workflows/tests.yml/badge.svg
 [tests_link]: https://github.com/dimagi/django-field-audit/actions/workflows/tests.yml
 [coverage_badge]: https://github.com/dimagi/django-field-audit/raw/coverage-badge/coverage.svg
+[coverage_link]: https://github.com/dimagi/django-field-audit/actions/workflows/coverage.yml
 [pypi_badge]: https://badge.fury.io/py/django-field-audit.svg
 [pypi_link]: https://pypi.org/project/django-field-audit/
 
