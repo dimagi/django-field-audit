@@ -150,9 +150,9 @@ class AuditEvent(models.Model):
         :param instance: an instance of a Django model
         :param field_name: a attribute name or Python dot-path of attribute
             names to get from the ``instance``.
-        :raises: ``ValueError`` if not ``field_name``. ``AttributeError`` raised
-            by calling ``getattr()`` on the instance or any intermediate
-            objects.
+        :raises: ``ValueError`` if not ``field_name`` (or any sub-attributes of
+            a dot-path). ``AttributeError`` may be raised from calling
+            ``getattr()`` on the instance or any intermediate objects.
         """
         value = instance
         for attr in field_name.split("."):
@@ -185,6 +185,15 @@ class AuditEvent(models.Model):
 
     @classmethod
     def reset_initial_values(cls, field_names, instance):
+        """Returns the previously attached "initial values" and attaches new
+        values.
+
+        :param field_names: a collection of names of fields on ``instance``
+            attach for later auditing
+        :param instance: instance of a Model subclass to be audited for changes
+        :raises: ``AttachValuesError`` if initial values are not attached to
+            the instance
+        """
         try:
             values = getattr(instance, cls.ATTACH_INIT_VALUES_AT)
         except AttributeError:
@@ -212,7 +221,6 @@ class AuditEvent(models.Model):
             ``is_delete`` is ``True`` -- when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
-        :returns: the resulting ``AuditEvent`` instance
         :raises: ``ValueError`` (invalid use of ``object_pk`` argument),
             ``AttributeError`` (no attribute ``field_name`` on ``instance``)
         """
