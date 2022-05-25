@@ -1,5 +1,6 @@
 # Django Field Audit change log
 
-## v0.1 - 2022-05-21
+## v0.2 - 2022-05-24
 
 - Initial implementation.
+- There is no version `0.1`.
