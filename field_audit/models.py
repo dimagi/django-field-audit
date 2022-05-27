@@ -105,7 +105,7 @@ def get_manager(attr_suffix, default):
 
     :param attr_suffix: Suffix (appended to ``FIELD_AUDIT_``) of settings
         attribute for the manager class path.
-    :parma default: Manager class. Returned if attribute isn't defined.
+    :param default: Manager class. Returned if attribute isn't defined.
     """
     settings_attr = f"FIELD_AUDIT_{attr_suffix}"
     try:
