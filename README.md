@@ -29,8 +29,8 @@ audit field changes on Django Models.
 
 ### Django Settings
 
-Add the app to your Django `INSTALLED_APPS` configuration to enable the app and
-run migrations. Installed apps settings example:
+To enable the app, add it to your Django `INSTALLED_APPS` configuration and run
+migrations. Settings example:
 
 ```python
 INSTALLED_APPS = [
@@ -39,8 +39,10 @@ INSTALLED_APPS = [
 ]
 ```
 
-If `changed_by` auditing is desired (enabled by default), add the app middleware
-to your Django `MIDDLEWARE` configuration. For example:
+The "auditor chain" (see `FIELD_AUDIT_AUDITORS` in the **Custom settings** table
+below) is configured out of the box with the default auditors. If `changed_by`
+auditing is desired for authenticated Django requests, add the app middleware to
+your Django `MIDDLEWARE` configuration. For example:
 
 ```python
 MIDDLEWARE = [
@@ -49,7 +51,15 @@ MIDDLEWARE = [
 ]
 ```
 
-#### Custom settings
+The audit chain can be updated to use custom auditors (subclasses of
+`field_audit.auditors.BaseAuditor`). If `changed_by` auditing is not desired,
+the audit chain can be cleared to avoid extra processing:
+
+```python
+FIELD_AUDIT_AUDITORS = []
+```
+
+#### Custom settings details
 
 | Name                              | Description                                                | Default value when unset
 |:----------------------------------|:-----------------------------------------------------------|:------------------------
