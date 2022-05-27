@@ -83,7 +83,7 @@ class RequestAuditor(BaseAuditor):
     """Auditor class for getting users from authenticated requests."""
 
     def changed_by(self, request):
-        if not request:
+        if request is None:
             # cannot provide a request user without a request
             return None
         if request.user.is_authenticated:

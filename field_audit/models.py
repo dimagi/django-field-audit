@@ -148,7 +148,7 @@ class AuditEvent(models.Model):
         of an attribute.
 
         :param instance: an instance of a Django model
-        :param field_name: a attribute name or Python dot-path of attribute
+        :param field_name: an attribute name or Python dot-path of attribute
             names to get from the ``instance``.
         :raises: ``ValueError`` if not ``field_name`` (or any sub-attributes of
             a dot-path). ``AttributeError`` may be raised from calling
@@ -168,7 +168,7 @@ class AuditEvent(models.Model):
         values were.
 
         :param field_names: a collection of names of fields on ``instance``
-            attach for later auditing
+            to attach for later auditing
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance

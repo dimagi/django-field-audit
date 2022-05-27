@@ -71,12 +71,6 @@ class TestDefaultAuditEventManager(TestCase):
             AuditEvent.objects.create(changed_by=cls.req_user, object_pk=0)
         }
 
-    @classmethod
-    def tearDownClass(cls):
-        for event in chain(cls.tty_events, cls.proc_events, cls.req_events):
-            event.delete()
-        super().tearDownClass()
-
     def test_by_system_user(self):
         self.assertEqual(
             self.tty_events.union(self.proc_events),
@@ -132,7 +126,6 @@ class NotManager:
 
 class TestManager(models.Manager):
     __test__ = False  # this is not a test
-    pass
 
 
 class TestAuditEvent(TestCase):
