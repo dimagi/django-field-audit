@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
-from itertools import chain
 from unittest.mock import patch
 
-from django.db import models, transaction
+from django.db import models
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -30,11 +29,6 @@ class TestAuditEventManager(TestCase):
             changed_by=cls.changed_by,
             object_pk=0,
         )]
-
-    @classmethod
-    def tearDownClass(cls):
-        AuditEvent.objects.filter(changed_by=cls.changed_by).delete()
-        super().tearDownClass()
 
     def test_by_type_and_username(self):
         self.assertEqual(
@@ -435,10 +429,8 @@ class TestFieldChange(TestCase):
         event = AuditEvent.objects.create(object_pk=0)
         FieldChange.objects.create(event=event, field_name="test1", delta={})
         # ^ doesn't raise
-        # atomic needed otherwise cleanup `event.delete()` will fail
-        with (transaction.atomic(), self.assertRaises(IntegrityError)):
+        with self.assertRaises(IntegrityError):
             FieldChange.objects.create(event=event, field_name="test2")
-        event.delete()
 
     def test_event_fk_not_nullable(self):
         change = FieldChange.objects.create(
@@ -467,14 +459,12 @@ class TestFieldChange(TestCase):
             field_name="test",
             delta={"old": 1, "new": 2},
         )
-        # atomic needed otherwise cleanup `event.delete()` will fail
-        with (transaction.atomic(), self.assertRaises(IntegrityError)):
+        with self.assertRaises(IntegrityError):
             FieldChange.objects.create(
                 event=event,
                 field_name="test",
                 delta={"old": 2, "new": 3},
             )
-        event.delete()
 
     def test_create_if_changed_init_value_with_is_create_raises(self):
         with self.assertRaises(ValueError):
