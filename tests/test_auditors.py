@@ -25,7 +25,8 @@ class TestAuditDispatcher(TestCase):
         audit_dispatcher.setup_auditors()
 
     def test_audit_dispatcher_default_auditor_chain(self):
-        self.assertSettingIsMissing("FIELD_AUDIT_AUDITORS")
+        with self.assertRaises(AttributeError):
+            getattr(settings, "FIELD_AUDIT_AUDITORS")
         request_auditor, sysuser_auditor = audit_dispatcher.auditors
         self.assertIsInstance(request_auditor, RequestAuditor)
         self.assertIsInstance(sysuser_auditor, SystemUserAuditor)
@@ -55,10 +56,6 @@ class TestAuditDispatcher(TestCase):
         self.assertFalse(issubclass(Flight, BaseAuditor))
         with self.assertRaises(ValueError):
             audit_dispatcher.setup_auditors()
-
-    def assertSettingIsMissing(self, setting_name):
-        with self.assertRaises(AttributeError):
-            getattr(settings, setting_name)
 
     def test_audit_dispatcher_chain(self):
         aud1 = MockAuditor(True)
@@ -126,10 +123,17 @@ class TestBaseAuditor(TestCase):
 class TestSystemUserAuditor(TestCase):
 
     def setUp(self):
+        super().setUp()
         self.auditor = SystemUserAuditor()
 
-    def test_systemuserauditor_changed_by_returns_none_for_request(self):
-        self.assertIsNone(self.auditor.changed_by(object()))
+    def test_systemuserauditor_changed_by_returns_sys_value_for_request(self):
+        def user(*args, **kw):
+            return b"test ..."
+        with patch("field_audit.auditors.check_output", side_effect=user):
+            self.assertEqual(
+                {"user_type": USER_TYPE_TTY, "username": "test"},
+                self.auditor.changed_by(object()),
+            )
 
     def _patch_system_getters_and_validate(self, fake_output, changed_by):
         kwargs = {"side_effect": fake_output}
@@ -208,9 +212,9 @@ class TestRequestAuditor(TestCase):
     def test_requestauditor_changed_by_returns_none_without_request(self):
         self.assertIsNone(self.auditor.changed_by(None))
 
-    def test_requestauditor_changed_by_returns_none_for_unauthorized_user(self):
+    def test_requestauditor_changed_by_returns_value_for_unauthorized_req(self):
         self.request.deauth()
-        self.assertIsNone(self.auditor.changed_by(self.request))
+        self.assertEqual({}, self.auditor.changed_by(self.request))
 
 
 class AuthedRequest:

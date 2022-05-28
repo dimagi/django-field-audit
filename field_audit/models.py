@@ -125,7 +125,7 @@ class AuditEvent(models.Model):
     event_date = models.DateTimeField(default=get_date, db_index=True)
     object_class_path = models.CharField(db_index=True, max_length=255)
     object_pk = models.JSONField()
-    changed_by = models.JSONField(null=True)
+    changed_by = models.JSONField()
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
 
@@ -237,10 +237,11 @@ class AuditEvent(models.Model):
             """Returns an instantiated ``AuditEvent`` instance."""
             from .auditors import audit_dispatcher
             if event is None:
+                changed_by = audit_dispatcher.dispatch(request)
                 return cls(
                     object_class_path=get_fqcn(type(instance)),
                     object_pk=object_pk,
-                    changed_by=audit_dispatcher.dispatch(request),
+                    changed_by={} if changed_by is None else changed_by,
                     is_create=is_create,
                     is_delete=is_delete,
                 )

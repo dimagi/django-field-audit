@@ -91,7 +91,8 @@ class RequestAuditor(BaseAuditor):
                 "user_type": USER_TYPE_REQUEST,
                 "username": request.user.username,
             }
-        return None
+        # short-circuit the audit chain for not-None requests
+        return {}
 
 
 class SystemUserAuditor(BaseAuditor):
@@ -101,12 +102,6 @@ class SystemUserAuditor(BaseAuditor):
         self.has_who_bin = True
 
     def changed_by(self, request):
-        if request:
-            # never return a system user when a request is provided
-            return None
-        return self._changed_by()
-
-    def _changed_by(self):
         username = None
         if self.has_who_bin:
             try:
