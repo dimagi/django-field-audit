@@ -492,13 +492,22 @@ class TestFieldChange(TestCase):
         with self.assertRaises(ValueError):
             FieldChange.create_if_changed("test", 1, False, True, 2)
 
-    def test_create_if_changed_with_missing_value_raises(self):
+    def test_create_if_changed_is_create_with_missing_value_raises(self):
+        with self.assertRaises(ValueError):
+            FieldChange.create_if_changed(
+                "test",
+                FieldChange.MISSING,
+                True,
+                False,
+            )
+
+    def test_create_if_changed_is_delete_with_missing_value_raises(self):
         with self.assertRaises(ValueError):
             FieldChange.create_if_changed(
                 "test",
                 FieldChange.MISSING,
                 False,
-                False,
+                True,
             )
 
     def test_create_if_changed(self):

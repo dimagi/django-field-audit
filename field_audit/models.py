@@ -320,13 +320,17 @@ class FieldChange(models.Model):
         :raises: ``ValueError``
         """
         missing = cls.MISSING  # create a local reference
-        if value is missing:
-            raise ValueError("'value' cannot be MISSING")
-        if (is_create or is_delete) and init_value is not missing:
-            raise ValueError(
-                "'init_value' is mutually exclusive with 'is_create' and "
-                "'is_delete'"
-            )
+        if is_create or is_delete:
+            if init_value is not missing:
+                raise ValueError(
+                    "'init_value' is mutually exclusive with 'is_create' and "
+                    "'is_delete'"
+                )
+            if value is missing:
+                # This could only result from a code bug and would cause a
+                # "no change" scenario (preventing creation of an AuditEvent for
+                # a create or delete), so we raise an exception.
+                raise ValueError("'value' cannot be MISSING")
         delta = {}
         if is_delete:
             delta["old"] = old_value = value
