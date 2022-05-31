@@ -64,7 +64,6 @@ FIELD_AUDIT_AUDITORS = []
 | Name                              | Description                                                | Default value when unset
 |:----------------------------------|:-----------------------------------------------------------|:------------------------
 | `FIELD_AUDIT_AUDITEVENT_MANAGER`  | A custom manager to use for the `AuditEvent` Model.        | `field_audit.models.DefaultAuditEventManager`
-| `FIELD_AUDIT_FIELDCHANGE_MANAGER` | A custom manager to use for the `FieldChange` Model.       | `django.db.models.Manager`
 | `FIELD_AUDIT_AUDITORS`            | A custom list of auditors for acquiring `changed_by` info. | `["field_audit.auditors.RequestAuditor", "field_audit.auditors.SystemUserAuditor"]`
 
 ### Model Auditing

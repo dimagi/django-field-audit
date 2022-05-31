@@ -15,10 +15,9 @@ from field_audit.models import (
     get_manager,
     AttachValuesError,
     AuditEvent,
-    FieldChange,
 )
 
-EVENT_REQ_FIELDS = {"object_pk": 0, "changed_by": {}}
+EVENT_REQ_FIELDS = {"object_pk": 0, "changed_by": {}, "delta": {}}
 
 
 class TestAuditEventManager(TestCase):
@@ -27,10 +26,9 @@ class TestAuditEventManager(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.changed_by = {"user_type": "User", "username": "test"}
-        cls.events = [AuditEvent.objects.create(
-            changed_by=cls.changed_by,
-            object_pk=0,
-        )]
+        fields = EVENT_REQ_FIELDS.copy()
+        fields["changed_by"] = cls.changed_by
+        cls.events = [AuditEvent.objects.create(**fields)]
 
     def test_by_type_and_username(self):
         self.assertEqual(
@@ -57,14 +55,16 @@ class TestDefaultAuditEventManager(TestCase):
             "user_type": USER_TYPE_REQUEST,
             "username": cls.username,
         }
+        req_fields = EVENT_REQ_FIELDS.copy()
+        del req_fields["changed_by"]
         cls.tty_events = {
-            AuditEvent.objects.create(changed_by=cls.tty_user, object_pk=0)
+            AuditEvent.objects.create(changed_by=cls.tty_user, **req_fields)
         }
         cls.proc_events = {
-            AuditEvent.objects.create(changed_by=cls.proc_user, object_pk=0)
+            AuditEvent.objects.create(changed_by=cls.proc_user, **req_fields)
         }
         cls.req_events = {
-            AuditEvent.objects.create(changed_by=cls.req_user, object_pk=0)
+            AuditEvent.objects.create(changed_by=cls.req_user, **req_fields)
         }
 
     def test_by_system_user(self):
@@ -197,6 +197,12 @@ class TestAuditEvent(TestCase):
         with self.assertRaises(IntegrityError):
             AuditEvent.objects.create(changed_by=None, **req_fields)
 
+    def test_delta_not_nullable(self):
+        req_fields = EVENT_REQ_FIELDS.copy()
+        del req_fields["delta"]
+        with self.assertRaises(IntegrityError):
+            AuditEvent.objects.create(delta=None, **req_fields)
+
     def test_is_create_defaults_false(self):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
         self.assertFalse(event.is_create)
@@ -280,13 +286,11 @@ class TestAuditEvent(TestCase):
         self.assertAuditTablesEmpty()
         AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
-        change, = event.changes.all()
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertFalse(event.is_create)
         self.assertFalse(event.is_delete)
-        self.assertEqual("value", change.field_name)
-        self.assertEqual({"old": 0, "new": 1}, change.delta)
+        self.assertEqual({"value": {"old": 0, "new": 1}}, event.delta)
 
     def test_audit_field_changes_for_multiple_saves(self):
         value = 0
@@ -299,13 +303,14 @@ class TestAuditEvent(TestCase):
             self.assertAuditTablesEmpty()
             AuditEvent.audit_field_changes(fields, instance, False, False, None)
             event, = AuditEvent.objects.all()
-            change, = event.changes.all()
             self.assertEqual(event.object_pk, instance.pk)
             self.assertEqual(event.changed_by, self.changed_by)
             self.assertFalse(event.is_create)
             self.assertFalse(event.is_delete)
-            self.assertEqual("value", change.field_name)
-            self.assertEqual({"old": value - 1, "new": value}, change.delta)
+            self.assertEqual(
+                {"value": {"old": value - 1, "new": value}},
+                event.delta,
+            )
             event.delete()
 
     def test_audit_field_changes_for_create(self):
@@ -315,13 +320,11 @@ class TestAuditEvent(TestCase):
         self.assertAuditTablesEmpty()
         AuditEvent.audit_field_changes(fields, instance, True, False, None)
         event, = AuditEvent.objects.all()
-        change, = event.changes.all()
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertTrue(event.is_create)
         self.assertFalse(event.is_delete)
-        self.assertEqual("value", change.field_name)
-        self.assertEqual({"new": 0}, change.delta)
+        self.assertEqual({"value": {"new": 0}}, event.delta)
 
     def test_audit_field_changes_for_delete(self):
         fields = {"value": 0}
@@ -331,13 +334,11 @@ class TestAuditEvent(TestCase):
         AuditEvent.audit_field_changes(fields, instance, False, True, None,
                                        object_pk=instance.pk)
         event, = AuditEvent.objects.all()
-        change, = event.changes.all()
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertFalse(event.is_create)
         self.assertTrue(event.is_delete)
-        self.assertEqual("value", change.field_name)
-        self.assertEqual({"old": 0}, change.delta)
+        self.assertEqual({"value": {"old": 0}}, event.delta)
 
     def test_audit_field_changes_init_values_missing(self):
         fields = {"value": 0, "other": 0}
@@ -350,14 +351,14 @@ class TestAuditEvent(TestCase):
         self.assertAuditTablesEmpty()
         AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
-        changes = {c.field_name: c for c in event.changes.all()}
-        self.assertEqual(set(fields), set(changes))
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertFalse(event.is_create)
         self.assertFalse(event.is_delete)
-        self.assertEqual({"new": 1}, changes["value"].delta)
-        self.assertEqual({"old": 0, "new": 1}, changes["other"].delta)
+        self.assertEqual(
+            {"value": {"new": 1}, "other": {"old": 0, "new": 1}},
+            event.delta,
+        )
 
     def test_audit_field_changes_calls_audit_dispatcher(self):
         fields = {"value": 0}
@@ -415,118 +416,12 @@ class TestAuditEvent(TestCase):
             AuditEvent.audit_field_changes(fields, instance, False, False, None)
         self.assertAuditTablesEmpty()
 
-    def test_audit_field_changes_saves_nothing_on_bulk_create_err(self):
-        fields = {"value": 0}
-        instance = TestModel(id=1, **fields)
-        AuditEvent.attach_initial_values(fields, instance)
-        instance.value = 1
-        self.assertAuditTablesEmpty()
-        exc = self.Error()
-        with (
-            patch.object(FieldChange.objects, "bulk_create", side_effect=exc),
-            self.assertRaises(self.Error),
-        ):
-            AuditEvent.audit_field_changes(fields, instance, False, False, None)
-            self.assertAuditTablesEmpty()
-
     def assertAuditTablesEmpty(self):
         # verify that the audit-related test tables are empty
         self.assertEqual([], list(AuditEvent.objects.all()))
-        self.assertEqual([], list(FieldChange.objects.all()))
 
 
 class TestModel(models.Model):
     __test__ = False  # this is not a test
     value = models.IntegerField(null=True)
     other = models.IntegerField(null=True)
-
-
-class TestFieldChange(TestCase):
-
-    def test_delta_not_nullable(self):
-        event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
-        FieldChange.objects.create(event=event, field_name="test1", delta={})
-        # ^ doesn't raise
-        with self.assertRaises(IntegrityError):
-            FieldChange.objects.create(event=event, field_name="test2")
-
-    def test_event_fk_not_nullable(self):
-        change = FieldChange.objects.create(
-            event=AuditEvent.objects.create(**EVENT_REQ_FIELDS),
-            field_name="test",
-            delta={},
-        )  # doesn't raise
-        change.event.delete()
-        with self.assertRaises(IntegrityError):
-            FieldChange.objects.create(field_name="test", delta={})
-
-    def test_event_fk_delete_cascades(self):
-        change = FieldChange.objects.create(
-            event=AuditEvent.objects.create(**EVENT_REQ_FIELDS),
-            field_name="test",
-            delta={},
-        )
-        change.event.delete()
-        with self.assertRaises(FieldChange.DoesNotExist):
-            FieldChange.objects.get(id=change.id)
-
-    def test_fields_event_and_field_name_unique_together(self):
-        event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
-        FieldChange.objects.create(
-            event=event,
-            field_name="test",
-            delta={"old": 1, "new": 2},
-        )
-        with self.assertRaises(IntegrityError):
-            FieldChange.objects.create(
-                event=event,
-                field_name="test",
-                delta={"old": 2, "new": 3},
-            )
-
-    def test_create_if_changed_init_value_with_is_create_raises(self):
-        with self.assertRaises(ValueError):
-            FieldChange.create_if_changed("test", 1, True, False, 2)
-
-    def test_create_if_changed_init_value_with_is_delete_raises(self):
-        with self.assertRaises(ValueError):
-            FieldChange.create_if_changed("test", 1, False, True, 2)
-
-    def test_create_if_changed_is_create_with_missing_value_raises(self):
-        with self.assertRaises(ValueError):
-            FieldChange.create_if_changed(
-                "test",
-                FieldChange.MISSING,
-                True,
-                False,
-            )
-
-    def test_create_if_changed_is_delete_with_missing_value_raises(self):
-        with self.assertRaises(ValueError):
-            FieldChange.create_if_changed(
-                "test",
-                FieldChange.MISSING,
-                False,
-                True,
-            )
-
-    def test_create_if_changed(self):
-        change = FieldChange.create_if_changed("test", 2, False, False, 1)
-        self.assertEqual("test", change.field_name)
-        self.assertEqual({"old": 1, "new": 2}, change.delta)
-
-    def test_create_if_changed_delta_lacks_old_key_without_init_value(self):
-        change = FieldChange.create_if_changed("test", 1, False, False)
-        self.assertEqual({"new": 1}, change.delta)
-
-    def test_create_if_changed_delta_lacks_old_key_for_create(self):
-        change = FieldChange.create_if_changed("test", 1, True, False)
-        self.assertEqual({"new": 1}, change.delta)
-
-    def test_create_if_changed_delta_lacks_new_key_for_delete(self):
-        change = FieldChange.create_if_changed("test", 1, False, True)
-        self.assertEqual({"old": 1}, change.delta)
-
-    def test_create_if_changed_returns_none_when_no_change(self):
-        change = FieldChange.create_if_changed("test", 1, False, False, 1)
-        self.assertIsNone(change)

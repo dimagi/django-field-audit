@@ -1,4 +1,4 @@
-import django.db.models.deletion
+from django.contrib.postgres.indexes import GinIndex
 from django.db import migrations, models
 
 from ..models import get_date
@@ -18,22 +18,18 @@ class Migration(migrations.Migration):
                 ('event_date', models.DateTimeField(db_index=True, default=get_date)),  # noqa: E501
                 ('object_class_path', models.CharField(db_index=True, max_length=255)),  # noqa: E501
                 ('object_pk', models.JSONField()),
-                ('changed_by', models.JSONField(null=True)),
+                ('changed_by', models.JSONField()),
                 ('is_create', models.BooleanField(default=False)),
                 ('is_delete', models.BooleanField(default=False)),
+                ('delta', models.JSONField()),
             ],
         ),
-        migrations.CreateModel(
-            name='FieldChange',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),  # noqa: E501
-                ('field_name', models.CharField(db_index=True, max_length=127)),
-                ('delta', models.JSONField()),
-                ('event', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='changes', to='field_audit.auditevent')),  # noqa: E501
-            ],
-            options={
-                'unique_together': {('event', 'field_name')},
-            },
+        migrations.AddIndex(
+            model_name='auditevent',
+            index=GinIndex(
+                fields=['delta'],
+                name='field_audit_delta_874f55_gin',
+            ),
         ),
         migrations.AddConstraint(
             model_name='auditevent',

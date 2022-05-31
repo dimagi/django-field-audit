@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from django.conf import settings
-from django.db import models, transaction
+from django.contrib.postgres.indexes import GinIndex
+from django.db import models
 
 from .utils import class_import_helper, get_fqcn
 
@@ -127,10 +128,14 @@ class AuditEvent(models.Model):
     changed_by = models.JSONField()
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
+    delta = models.JSONField()
 
     objects = get_manager("AUDITEVENT_MANAGER", DefaultAuditEventManager)
 
     class Meta:
+        indexes = [
+            GinIndex(fields=["delta"]),
+        ]
         constraints = [
             models.CheckConstraint(
                 name="field_audit_auditevent_valid_create_or_delete",
@@ -204,9 +209,8 @@ class AuditEvent(models.Model):
     @classmethod
     def audit_field_changes(cls, field_names, instance, is_create, is_delete,
                             request, object_pk=None):
-        """Factory method for creating a new ``AuditEvent`` and related
-        ``FieldChange``s for an instance of a model that's being audited for
-        changes.
+        """Factory method for creating a new ``AuditEvent`` for an instance of a
+        model that's being audited for changes.
 
         :param field_names: a collection of names of fields on ``instance`` to
             audit for changes
@@ -217,136 +221,49 @@ class AuditEvent(models.Model):
             DB record (setting ``True`` implies that ``instance`` is changing)
         :param request: the request object responsible for the change
         :param object_pk: (Optional) primary key of the instance. Only used when
-            ``is_delete`` is ``True`` -- when the instance itself no longer
+            ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
-        :raises: ``ValueError`` (invalid use of ``object_pk`` argument),
-            ``AttributeError`` (no attribute ``field_name`` on ``instance``)
+        :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
         """
-
         if not is_delete:
             if object_pk is not None:
                 raise ValueError(
-                    "'object_pk' argument is ambiguous when 'is_delete' is "
-                    "False"
+                    "'object_pk' arg is ambiguous when 'is_delete == False'"
                 )
             object_pk = instance.pk
-
-        def lazy_event():
-            """Returns an instantiated ``AuditEvent`` instance."""
-            from .auditors import audit_dispatcher
-            if event is None:
-                changed_by = audit_dispatcher.dispatch(request)
-                return cls(
-                    object_class_path=get_fqcn(type(instance)),
-                    object_pk=object_pk,
-                    changed_by={} if changed_by is None else changed_by,
-                    is_create=is_create,
-                    is_delete=is_delete,
-                )
-            return event
-
         # fetch (and reset for next db write operation) initial values
         init_values = cls.reset_initial_values(field_names, instance)
-        if is_create or is_delete:
-            # initial values are meaningless in these scenarios, discard them
-            init_values = {}
-
-        event = None
-        changes = []
+        delta = {}
         for field_name in field_names:
-            kwargs = {
-                "field_name": field_name,
-                "value": cls.get_field_value(instance, field_name),
-                "is_create": is_create,
-                "is_delete": is_delete,
-            }
-            if init_values:
+            value = cls.get_field_value(instance, field_name)
+            if is_create:
+                delta[field_name] = {"new": value}
+            elif is_delete:
+                delta[field_name] = {"old": value}
+            else:
                 try:
-                    kwargs["init_value"] = init_values[field_name]
+                    init_value = init_values[field_name]
                 except KeyError:
-                    pass
-            change = FieldChange.create_if_changed(**kwargs)
-            if change is not None:
-                # only instantiate the top-level event once we know we need it
-                event = lazy_event()
-                change.event = event
-                changes.append(change)
-        if changes:
-            with transaction.atomic():
-                event.save()
-                FieldChange.objects.bulk_create(changes)
+                    delta[field_name] = {"new": value}
+                else:
+                    if init_value != value:
+                        delta[field_name] = {"old": init_value, "new": value}
+        if delta:
+            from .auditors import audit_dispatcher
+            changed_by = audit_dispatcher.dispatch(request)
+            cls.objects.create(
+                object_class_path=get_fqcn(type(instance)),
+                object_pk=object_pk,
+                changed_by={} if changed_by is None else changed_by,
+                is_create=is_create,
+                is_delete=is_delete,
+                delta=delta,
+            )
 
     def __repr__(self):  # pragma: no cover
         cls_name = type(self).__name__
         return f"<{cls_name} ({self.id}, {self.object_class_path!r})>"
-
-
-class FieldChange(models.Model):
-    event = models.ForeignKey(
-        AuditEvent,
-        on_delete=models.CASCADE,
-        related_name="changes",
-    )
-    field_name = models.CharField(db_index=True, max_length=127)
-    delta = models.JSONField()
-
-    objects = get_manager("FIELDCHANGE_MANAGER", models.Manager)
-
-    class MISSING:
-        pass
-    MISSING = MISSING()  # a unique object that reprs nicely
-
-    class Meta:
-        unique_together = [("event", "field_name")]
-
-    @classmethod
-    def create_if_changed(cls, field_name, value, is_create, is_delete,
-                          init_value=MISSING):
-        """Factory method to create a new ``FieldChange`` containing the details
-        of a field change on a Model object.
-
-        :param field_name: name of the field that may have changed
-        :param value: current value of the field (i.e. value present when the DB
-            write (e.g. ``save()``, ``delete()``, etc) operation occurs.
-        :param is_create: whether or not the change is creating ``instance``
-        :param is_delete: whether or not the change is deleting ``instance``
-        :param init_value: value of the field before it was changed (not used
-            when either ``is_delete`` or ``is_create`` are True, providing a
-            value in either scenario will raise an exception)
-        :returns: new instance of a ``FieldChange`` object or ``None``
-        :raises: ``ValueError``
-        """
-        missing = cls.MISSING  # create a local reference
-        if is_create or is_delete:
-            if init_value is not missing:
-                raise ValueError(
-                    "'init_value' is mutually exclusive with 'is_create' and "
-                    "'is_delete'"
-                )
-            if value is missing:
-                # This could only result from a code bug and would cause a
-                # "no change" scenario (preventing creation of an AuditEvent for
-                # a create or delete), so we raise an exception.
-                raise ValueError("'value' cannot be MISSING")
-        delta = {}
-        if is_delete:
-            delta["old"] = old_value = value
-            new_value = missing
-        else:
-            if is_create or init_value is missing:
-                old_value = missing
-            else:
-                delta["old"] = old_value = init_value
-            delta["new"] = new_value = value
-        if old_value == new_value:
-            # no value change, don't create an instance
-            return None
-        return cls(field_name=field_name, delta=delta)
-
-    def __repr__(self):  # pragma: no cover
-        cls_name = type(self).__name__
-        return f"<{cls_name} ({self.id}, {self.field_name!r})>"
 
 
 class AttachValuesError(Exception):
