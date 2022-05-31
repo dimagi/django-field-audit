@@ -12,8 +12,6 @@ else:
 
 DATABASES = {"default": _db_settings}
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
 INSTALLED_APPS = [
     "field_audit",
     "tests",
@@ -27,9 +25,6 @@ SECRET_KEY = "test"
 
 # --------------------
 # field_audit settings
-#
-# -- App uses 'django.db.models.BigAutoField' if unset. Override as needed.
-# FIELD_AUDIT_AUTO_FIELD = "django.db.models.AutoField"
 #
 # -- Default values below, override as needed.
 # FIELD_AUDIT_AUDITEVENT_MANAGER = "field_audit.models.DefaultAuditEventManager"

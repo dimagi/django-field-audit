@@ -121,7 +121,6 @@ def get_date():
 
 
 class AuditEvent(models.Model):
-    # id = models.BigAutoField(primary_key=True)
     event_date = models.DateTimeField(default=get_date, db_index=True)
     object_class_path = models.CharField(db_index=True, max_length=255)
     object_pk = models.JSONField()
@@ -284,7 +283,6 @@ class AuditEvent(models.Model):
 
 
 class FieldChange(models.Model):
-
     event = models.ForeignKey(
         AuditEvent,
         on_delete=models.CASCADE,

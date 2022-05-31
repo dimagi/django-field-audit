@@ -147,7 +147,6 @@ twine upload dist/*
 - Switch to `pytest` to support Python 3.10.
 - Write `test_library.py` functional test module for entire library.
 - Add support for `QuerySet` write operations (`update()`, etc).
-- Possibly remove `AutoField` accommodations and just force `BigAutoField`.
 
 ### Backlog
 
