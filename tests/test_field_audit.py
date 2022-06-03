@@ -58,7 +58,7 @@ class TestFieldAudit(TestCase):
             audit_fields("value")(TestSubject)
             self.assertIn(TestSubject, audited_models())
 
-    def test_audit_fields_wraps_methods(self):
+    def test_audit_fields_wraps_supported_methods(self):
         with self.restore_audited_models():
 
             @audit_fields("value")
@@ -71,6 +71,9 @@ class TestFieldAudit(TestCase):
                 def delete(self):
                     pass
 
+                def unsupported(self):
+                    pass
+
             with patch.object(AuditEvent, "attach_initial_values") as classmeth:
                 item = Item()
                 classmeth.assert_called_once()
@@ -80,6 +83,9 @@ class TestFieldAudit(TestCase):
                 classmeth.reset_mock()
                 item.delete()
                 classmeth.assert_called_once()
+                classmeth.reset_mock()
+                item.unsupported()
+                classmeth.assert_not_called()
 
     def test_audited_models(self):
         self.assertEqual(
