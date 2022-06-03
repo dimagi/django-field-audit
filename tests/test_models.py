@@ -17,6 +17,8 @@ from field_audit.models import (
     AuditEvent,
 )
 
+from .models import Aircraft, CrewMember, Flight
+
 EVENT_REQ_FIELDS = {"object_pk": 0, "changed_by": {}, "delta": {}}
 
 
@@ -151,32 +153,29 @@ class TestAuditEvent(TestCase):
         super().tearDownClass()
 
     def test_get_field_value(self):
-        self.assertIs(
-            self.changed_by,
-            AuditEvent.get_field_value(self, "changed_by"),
-        )
+        staff = CrewMember(title="Purser")
+        self.assertIsNone(AuditEvent.get_field_value(staff, "id"))
+        self.assertEqual("Purser", AuditEvent.get_field_value(staff, "title"))
 
-    def test_get_field_value_dot_path(self):
-        self.assertIs(
-            self.__class__.MockAuditor.__init__,
-            AuditEvent.get_field_value(self, "__class__.MockAuditor.__init__"),
-        )
+    def test_get_field_value_for_null_foreignkey(self):
+        flight = Flight()
+        self.assertIsNone(AuditEvent.get_field_value(flight, "aircraft"))
 
-    def test_get_field_value_raises_with_invalid_attribute(self):
-        with self.assertRaises(ValueError):
-            AuditEvent.get_field_value(object(), "")
+    def test_get_field_value_for_foreignkey_with_reference_value(self):
+        flight = Flight(aircraft=Aircraft(id=-1, tail_number="N778UA"))
+        self.assertEqual(-1, AuditEvent.get_field_value(flight, "aircraft"))
 
-    def test_get_field_value_raises_with_invalid_dot_path(self):
-        with self.assertRaises(ValueError):
-            AuditEvent.get_field_value(self, "changed_by.")
-        with self.assertRaises(ValueError):
-            AuditEvent.get_field_value(self, ".changed_by")
-        with self.assertRaises(ValueError):
-            AuditEvent.get_field_value(self, "changed_by..keys")
+    def test_get_field_value_for_alternate_foreignkey_to_field(self):
 
-    def test_get_field_value_raises_attributeerror_if_missing(self):
-        with self.assertRaises(AttributeError):
-            AuditEvent.get_field_value(object(), "bogus")
+        class FlyByTailNumber(models.Model):
+            aircraft = models.ForeignKey(
+                Aircraft,
+                on_delete=models.CASCADE,
+                to_field="tail_number",
+            )
+
+        flyby = FlyByTailNumber(aircraft=Aircraft(tail_number="CGXII"))
+        self.assertEqual("CGXII", AuditEvent.get_field_value(flyby, "aircraft"))
 
     def test_event_date_default(self):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
@@ -255,12 +254,6 @@ class TestAuditEvent(TestCase):
         instance = TestModel(id=1, value=0)
         with self.assertRaises(AttachValuesError):
             AuditEvent.reset_initial_values([], instance)
-
-    def test_audit_field_changes_with_invalid_field_raises(self):
-        inst = TestModel()
-        AuditEvent.attach_initial_values([], inst)
-        with self.assertRaises(AttributeError):
-            AuditEvent.audit_field_changes(["invalid"], inst, True, False, None)
 
     def test_audit_field_changes_non_delete_with_object_pk_raises(self):
         inst = TestModel()

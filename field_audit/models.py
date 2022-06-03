@@ -147,23 +147,12 @@ class AuditEvent(models.Model):
 
     @staticmethod
     def get_field_value(instance, field_name):
-        """Returns the value described by ``field_name``, which might be a
-        simple attribute name or a Python dot-path representing an attribute
-        of an attribute.
+        """Returns the database value of a field on ``instance``.
 
         :param instance: an instance of a Django model
-        :param field_name: an attribute name or Python dot-path of attribute
-            names to get from the ``instance``.
-        :raises: ``ValueError`` if not ``field_name`` (or any sub-attributes of
-            a dot-path). ``AttributeError`` may be raised from calling
-            ``getattr()`` on the instance or any intermediate objects.
+        :param field_name: name of a field on ``instance``
         """
-        value = instance
-        for attr in field_name.split("."):
-            if not attr:
-                raise ValueError(f"invalid field_name: {field_name!r}")
-            value = getattr(value, attr)
-        return value
+        return instance._meta.get_field(field_name).value_from_object(instance)
 
     @classmethod
     def attach_initial_values(cls, field_names, instance):
