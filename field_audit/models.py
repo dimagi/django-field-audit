@@ -117,6 +117,11 @@ def get_manager(attr_suffix, default):
 
 
 def get_date():
+    """Returns the current UTC date/time.
+
+    This is the "getter" for default values of the ``AuditEvent.event_date``
+    field.
+    """
     return datetime.utcnow()
 
 
@@ -204,7 +209,8 @@ class AuditEvent(models.Model):
             record (setting ``True`` implies that ``instance`` is changing)
         :param is_delete: whether or not the audited event deletes an existing
             DB record (setting ``True`` implies that ``instance`` is changing)
-        :param request: the request object responsible for the change
+        :param request: the request object responsible for the change (or
+            ``None`` if there is no request)
         :param object_pk: (Optional) primary key of the instance. Only used when
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
