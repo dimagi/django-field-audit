@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from django.conf import settings
-from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 from .utils import class_import_helper, get_fqcn
@@ -133,9 +132,6 @@ class AuditEvent(models.Model):
     objects = get_manager("AUDITEVENT_MANAGER", DefaultAuditEventManager)
 
     class Meta:
-        indexes = [
-            GinIndex(fields=["delta"]),
-        ]
         constraints = [
             models.CheckConstraint(
                 name="field_audit_auditevent_valid_create_or_delete",

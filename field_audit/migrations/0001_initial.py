@@ -1,4 +1,3 @@
-from django.contrib.postgres.indexes import GinIndex
 from django.db import migrations, models
 
 from ..models import get_date
@@ -23,13 +22,6 @@ class Migration(migrations.Migration):
                 ('is_delete', models.BooleanField(default=False)),
                 ('delta', models.JSONField()),
             ],
-        ),
-        migrations.AddIndex(
-            model_name='auditevent',
-            index=GinIndex(
-                fields=['delta'],
-                name='field_audit_delta_874f55_gin',
-            ),
         ),
         migrations.AddConstraint(
             model_name='auditevent',
