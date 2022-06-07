@@ -1,3 +1,4 @@
+import contextvars
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -8,11 +9,9 @@ from field_audit.field_audit import (
     AlreadyAudited,
     _audited_models,
     _decorate_db_write,
-    _get_request,
-    _thread,
     audit_fields,
     audited_models,
-    set_request,
+    request as audit_request,
 )
 from field_audit.models import AuditEvent
 
@@ -94,14 +93,14 @@ class TestFieldAudit(TestCase):
         )
 
     def test_get_and_set_request(self):
-        request = object()
-        self.assertIsNone(_get_request())
-        set_request(request)
-        try:
-            self.assertIs(request, _get_request())
-        finally:
-            # clear the request to keep test env sterile
-            del _thread.request
+        def test():
+            self.assertIsNone(audit_request.get())
+            request = object()
+            audit_request.set(request)
+            self.assertIs(request, audit_request.get())
+        # run the test in a separate context to keep the test env sterile
+        context = contextvars.copy_context()
+        context.run(test)
 
     @contextmanager
     def restore_audited_models(self):

@@ -1,10 +1,10 @@
-import threading
+import contextvars
 from functools import wraps
 
 from django.db import models
 
 
-__all__ = ["AlreadyAudited", "audit_fields", "audited_models", "set_request"]
+__all__ = ["AlreadyAudited", "audit_fields", "audited_models", "request"]
 
 
 class AlreadyAudited(Exception):
@@ -56,7 +56,7 @@ def _decorate_db_write(func, field_names):
             self,
             is_create,
             is_delete,
-            _get_request(),
+            request.get(),
             object_pk,
         )
         return ret
@@ -68,20 +68,9 @@ def _decorate_db_write(func, field_names):
     return wrapper
 
 
-def _get_request():
-    try:
-        return _thread.request
-    except AttributeError:
-        return None
-
-
 def audited_models():
     return _audited_models.copy()
 
 
-def set_request(request):
-    _thread.request = request
-
-
 _audited_models = []
-_thread = threading.local()
+request = contextvars.ContextVar("request", default=None)

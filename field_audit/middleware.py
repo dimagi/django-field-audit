@@ -1,4 +1,4 @@
-from .field_audit import set_request
+from .field_audit import request as audit_request
 
 
 class FieldAuditMiddleware:
@@ -10,7 +10,7 @@ class FieldAuditMiddleware:
         self.get_response = get_response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        set_request(request)
+        audit_request.set(request)
         return None
 
     def __call__(self, request):
