@@ -87,6 +87,14 @@ class Aircraft(models.Model):
     operated_by = models.CharField(max_length=64)
 ```
 
+### Using with SQLite
+
+This app uses Django's `JSONField` which means if you intend to use the app with
+a SQLite database, the SQLite `JSON1` extension is required. If your system's
+Python `sqlite3` library doesn't ship with this extension enabled, see
+[this article]((https://code.djangoproject.com/wiki/JSON1Extension)) for details
+on how to enable it.
+
 
 ## Contributing
 
@@ -103,6 +111,10 @@ pip install django nose flake8 coverage
 ```
 
 ### Running tests
+
+**Note**: By default, local tests use an in-memory SQLite database. Ensure that
+your local Python's `sqlite3` library ships with the `JSON1` extension enabled
+(see [Using with SQLite](#using-with-sqlite)).
 
 - Tests
   ```shell
