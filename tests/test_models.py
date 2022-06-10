@@ -177,6 +177,19 @@ class TestAuditEvent(TestCase):
         flyby = FlyByTailNumber(aircraft=Aircraft(tail_number="CGXII"))
         self.assertEqual("CGXII", AuditEvent.get_field_value(flyby, "aircraft"))
 
+    def test_get_field_value_uses_field_to_python_value(self):
+
+        class CleverTitle:
+
+            def __init__(self, title):
+                self.title = title
+
+            def __str__(self):
+                return self.title
+
+        capt = CrewMember(title=CleverTitle("Captain"))
+        self.assertEqual("Captain", AuditEvent.get_field_value(capt, "title"))
+
     def test_event_date_default(self):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
         self.assertLess(

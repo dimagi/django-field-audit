@@ -153,7 +153,8 @@ class AuditEvent(models.Model):
         :param instance: an instance of a Django model
         :param field_name: name of a field on ``instance``
         """
-        return instance._meta.get_field(field_name).value_from_object(instance)
+        field = instance._meta.get_field(field_name)
+        return field.to_python(field.value_from_object(instance))
 
     @classmethod
     def attach_initial_values(cls, field_names, instance):
