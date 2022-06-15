@@ -18,6 +18,7 @@ from field_audit.models import (
 )
 
 from .models import Aircraft, CrewMember, Flight
+from .test_field_audit import override_audited_models
 
 EVENT_REQ_FIELDS = {"object_pk": 0, "changed_by": {}, "delta": {}}
 
@@ -290,7 +291,8 @@ class TestAuditEvent(TestCase):
         AuditEvent.attach_initial_values(fields, instance)
         instance.value = 1
         self.assertAuditTablesEmpty()
-        AuditEvent.audit_field_changes(fields, instance, False, False, None)
+        with override_audited_models({TestModel: "TestModel"}):
+            AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
@@ -307,8 +309,11 @@ class TestAuditEvent(TestCase):
             value += 1
             instance.value = value
             self.assertAuditTablesEmpty()
-            AuditEvent.audit_field_changes(fields, instance, False, False, None)
+            with override_audited_models({TestModel: "TestModel"}):
+                AuditEvent.audit_field_changes(fields, instance, False, False,
+                                               None)
             event, = AuditEvent.objects.all()
+            self.assertEqual(event.object_class_path, "TestModel")
             self.assertEqual(event.object_pk, instance.pk)
             self.assertEqual(event.changed_by, self.changed_by)
             self.assertFalse(event.is_create)
@@ -324,8 +329,10 @@ class TestAuditEvent(TestCase):
         instance = TestModel(id=1, **fields)
         AuditEvent.attach_initial_values(fields, instance)
         self.assertAuditTablesEmpty()
-        AuditEvent.audit_field_changes(fields, instance, True, False, None)
+        with override_audited_models({TestModel: "TestModel"}):
+            AuditEvent.audit_field_changes(fields, instance, True, False, None)
         event, = AuditEvent.objects.all()
+        self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertTrue(event.is_create)
@@ -337,9 +344,11 @@ class TestAuditEvent(TestCase):
         instance = TestModel(id=1, **fields)
         AuditEvent.attach_initial_values(fields, instance)
         self.assertAuditTablesEmpty()
-        AuditEvent.audit_field_changes(fields, instance, False, True, None,
-                                       object_pk=instance.pk)
+        with override_audited_models({TestModel: "TestModel"}):
+            AuditEvent.audit_field_changes(fields, instance, False, True, None,
+                                           object_pk=instance.pk)
         event, = AuditEvent.objects.all()
+        self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertFalse(event.is_create)
@@ -355,8 +364,10 @@ class TestAuditEvent(TestCase):
         # simulate a missing field
         del getattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT)["value"]
         self.assertAuditTablesEmpty()
-        AuditEvent.audit_field_changes(fields, instance, False, False, None)
+        with override_audited_models({TestModel: "TestModel"}):
+            AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
+        self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
         self.assertEqual(event.changed_by, self.changed_by)
         self.assertFalse(event.is_create)
@@ -366,13 +377,26 @@ class TestAuditEvent(TestCase):
             event.delta,
         )
 
+    def test_audit_field_changes_calls_get_audited_class_path(self):
+        fields = {"value": 0}
+        instance = TestModel(id=1, **fields)
+        AuditEvent.attach_initial_values(fields, instance)
+        instance.value = 1
+        patch_this = "field_audit.field_audit.get_audited_class_path"
+        with patch(patch_this, return_value="test.Path") as get_acp:
+            AuditEvent.audit_field_changes(fields, instance, False, False, None)
+        get_acp.assert_called_once_with(TestModel)
+
     def test_audit_field_changes_calls_audit_dispatcher(self):
         fields = {"value": 0}
         instance = TestModel(id=1, **fields)
         AuditEvent.attach_initial_values(fields, instance)
         instance.value = 1
         req = object()
-        with patch.object(audit_dispatcher, "dispatch", return_value={}) as dsp:
+        with (
+            override_audited_models({TestModel: "TestModel"}),
+            patch.object(audit_dispatcher, "dispatch", return_value={}) as dsp,
+        ):
             AuditEvent.audit_field_changes(fields, instance, False, False, req)
         dsp.assert_called_once_with(req)
 
@@ -382,7 +406,10 @@ class TestAuditEvent(TestCase):
         AuditEvent.attach_initial_values(fields, instance)
         instance.value = 1
         self.assertAuditTablesEmpty()
-        with patch.object(audit_dispatcher, "dispatch", return_value=None):
+        with (
+            override_audited_models({TestModel: "TestModel"}),
+            patch.object(audit_dispatcher, "dispatch", return_value=None),
+        ):
             AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
         self.assertEqual({}, event.changed_by)
@@ -416,6 +443,7 @@ class TestAuditEvent(TestCase):
         instance.value = 1
         self.assertAuditTablesEmpty()
         with (
+            override_audited_models({TestModel: "TestModel"}),
             patch.object(AuditEvent, "save", side_effect=self.Error()),
             self.assertRaises(self.Error),
         ):

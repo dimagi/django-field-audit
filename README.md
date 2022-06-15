@@ -153,7 +153,6 @@ twine upload dist/*
 
 ## TODO
 
-- Implement custom class path values.
 - Write backfill migration utility / management command.
 - Add support for `QuerySet` write operations (`update()`, etc).
 - Write full library documentation using github.io.

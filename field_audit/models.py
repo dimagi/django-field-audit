@@ -3,7 +3,7 @@ from datetime import datetime
 from django.conf import settings
 from django.db import models
 
-from .utils import class_import_helper, get_fqcn
+from .utils import class_import_helper
 
 USER_TYPE_TTY = "SystemTtyOwner",
 USER_TYPE_PROCESS = "SystemProcessOwner"
@@ -243,9 +243,10 @@ class AuditEvent(models.Model):
                         delta[field_name] = {"old": init_value, "new": value}
         if delta:
             from .auditors import audit_dispatcher
+            from .field_audit import get_audited_class_path
             changed_by = audit_dispatcher.dispatch(request)
             cls.objects.create(
-                object_class_path=get_fqcn(type(instance)),
+                object_class_path=get_audited_class_path(type(instance)),
                 object_pk=object_pk,
                 changed_by={} if changed_by is None else changed_by,
                 is_create=is_create,
