@@ -4,6 +4,7 @@
 
 - Remove `FieldChange` model in favor of storing the full delta on the
   `AuditEvent` model.
+- Add ability to define custom class paths for audited models.
 - **IMPORTANT NOTE**: if you used version 0.2 to generate audit records, this
   upgrade is destructive.
 

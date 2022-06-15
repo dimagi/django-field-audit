@@ -161,7 +161,6 @@ twine upload dist/*
 
 ### Backlog
 
-- Write model path change migration utility [maybe].
 - Add to optimization for `instance.save(save_fields=[...])` [maybe].
 - Support adding new audit fields on the same model at different times (instead
   of raising `AlreadyAudited`) [maybe].
