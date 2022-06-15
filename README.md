@@ -153,15 +153,15 @@ twine upload dist/*
 
 ## TODO
 
+- Implement custom class path values.
 - Write backfill migration utility / management command.
+- Add support for `QuerySet` write operations (`update()`, etc).
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
 - Write `test_library.py` functional test module for entire library.
-- Add support for `QuerySet` write operations (`update()`, etc).
 
 ### Backlog
 
-- Don't use `threading.local()` for tracking the request.
 - Write model path change migration utility [maybe].
 - Add to optimization for `instance.save(save_fields=[...])` [maybe].
 - Support adding new audit fields on the same model at different times (instead
