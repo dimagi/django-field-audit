@@ -135,6 +135,7 @@ class AuditEvent(models.Model):
     change_context = models.JSONField()
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
+    is_bootstrap = models.BooleanField(default=False, db_index=True)
     delta = models.JSONField()
 
     objects = get_manager("AUDITEVENT_MANAGER", DefaultAuditEventManager)
@@ -142,8 +143,12 @@ class AuditEvent(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                name="field_audit_auditevent_valid_create_or_delete",
-                check=~models.Q(is_create=True, is_delete=True),
+                name="field_audit_auditevent_chk_create_or_delete_or_bootstrap",
+                check=~(
+                    models.Q(is_create=True, is_delete=True) | \
+                    models.Q(is_create=True, is_bootstrap=True) | \
+                    models.Q(is_delete=True, is_bootstrap=True)  # noqa: E502
+                ),
             ),
         ]
 

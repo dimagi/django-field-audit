@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from django.db import models
+from django.db import models, transaction
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -225,19 +225,42 @@ class TestAuditEvent(TestCase):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
         self.assertFalse(event.is_delete)
 
-    def test_is_create_and_is_delete_exclusive_constraint(self):
+    def test_is_bootstrap_defaults_false(self):
+        event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
+        self.assertFalse(event.is_bootstrap)
+
+    def test_is_create_or_is_delete_or_is_bootstrap_exclusive_constraint(self):
         event = AuditEvent.objects.create(is_create=True, **EVENT_REQ_FIELDS)
         # ^ doesn't raise
         self.assertTrue(event.is_create)
         self.assertFalse(event.is_delete)
+        self.assertFalse(event.is_bootstrap)
         event = AuditEvent.objects.create(is_delete=True, **EVENT_REQ_FIELDS)
         # ^ doesn't raise
         self.assertFalse(event.is_create)
         self.assertTrue(event.is_delete)
-        with self.assertRaises(IntegrityError):
+        self.assertFalse(event.is_bootstrap)
+        event = AuditEvent.objects.create(is_bootstrap=True, **EVENT_REQ_FIELDS)
+        # ^ doesn't raise
+        self.assertFalse(event.is_create)
+        self.assertFalse(event.is_delete)
+        self.assertTrue(event.is_bootstrap)
+        with transaction.atomic(), self.assertRaises(IntegrityError):
             AuditEvent.objects.create(
                 is_create=True,
                 is_delete=True,
+                **EVENT_REQ_FIELDS,
+            )
+        with transaction.atomic(), self.assertRaises(IntegrityError):
+            AuditEvent.objects.create(
+                is_create=True,
+                is_bootstrap=True,
+                **EVENT_REQ_FIELDS,
+            )
+        with transaction.atomic(), self.assertRaises(IntegrityError):
+            AuditEvent.objects.create(
+                is_delete=True,
+                is_bootstrap=True,
                 **EVENT_REQ_FIELDS,
             )
 
