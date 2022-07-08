@@ -87,6 +87,20 @@ class Aircraft(models.Model):
     operated_by = models.CharField(max_length=64)
 ```
 
+#### Audited DB write operations
+
+| DB Write Method               | Audited
+|:------------------------------|:-------
+| `Model.delete()`              | Yes
+| `Model.save()`                | Yes
+| `QuerySet.bulk_create()`      | No
+| `QuerySet.bulk_update()`      | No
+| `QuerySet.create()`           | Yes (via `Model.save()`)
+| `QuerySet.delete()`           | No
+| `QuerySet.get_or_create()`    | Yes (via `QuerySet.create()`)
+| `QuerySet.update()`           | No
+| `QuerySet.update_or_create()` | Yes (via `QuerySet.get_or_create()` and `Model.save()`)
+
 ### Using with SQLite
 
 This app uses Django's `JSONField` which means if you intend to use the app with
@@ -154,10 +168,13 @@ twine upload dist/*
 ## TODO
 
 - Write backfill migration utility / management command.
-- Add support for `QuerySet` write operations (`update()`, etc).
+- Add support for remaining `QuerySet` write operations:
+  - `bulk_create()`
+  - `bulk_update()`
+  - `delete()`
+  - `update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
-- Write `test_library.py` functional test module for entire library.
 
 ### Backlog
 

@@ -21,6 +21,7 @@ from .models import (
     Aircraft,
     CrewMember,
     Flight,
+    SimpleModel,
 )
 
 
@@ -89,7 +90,7 @@ class TestFieldAudit(TestCase):
 
     def test_get_audited_models(self):
         self.assertEqual(
-            {Aerodrome, Aircraft, CrewMember, Flight},
+            {Aerodrome, Aircraft, CrewMember, Flight, SimpleModel},
             set(get_audited_models()),
         )
 

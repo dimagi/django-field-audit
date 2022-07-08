@@ -27,6 +27,15 @@ def audit_fields(*field_names, class_path=None):
     :param class_path: optional name to use as the ``object_class_path`` field
         on audit events. The default (``None``) means the audited model's
         fully qualified "dot path" will be used.
+
+    Auditing is performed by decorating the model class's ``__init__()``,
+    ``delete()`` and ``save()`` methods which provides audit events for all DB
+    write operations except:
+
+    - ``QuerySet.bulk_create()``
+    - ``QuerySet.bulk_update()``
+    - ``QuerySet.update()``
+    - ``QuerySet.delete()``
     """
     def wrapper(cls):
         if cls in _audited_models:

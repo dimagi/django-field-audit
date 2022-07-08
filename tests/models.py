@@ -14,6 +14,12 @@ from django.db.models import (
 from field_audit import audit_fields
 
 
+@audit_fields("id", "value")
+class SimpleModel(Model):
+    id = AutoField(primary_key=True)
+    value = CharField(max_length=8, null=True)
+
+
 @audit_fields("name", "title", "flight_hours")
 class CrewMember(Model):
     id = AutoField(primary_key=True)
