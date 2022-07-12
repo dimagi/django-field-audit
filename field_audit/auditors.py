@@ -50,15 +50,15 @@ class _AuditDispatcher:
 
     def dispatch(self, request):
         """Cycles through the auditors chain and returns the first non-None
-        value returned by a call to ``auditor.changed_by(request)``.
+        value returned by a call to ``auditor.change_context(request)``.
 
         :param request: Django request to be audited (or ``None``).
         :returns: JSON-serializable value (or ``None`` if chain is exhausted).
         """
         for auditor in self.auditors:
-            changed_by = auditor.changed_by(request)
-            if changed_by is not None:
-                return changed_by
+            change_context = auditor.change_context(request)
+            if change_context is not None:
+                return change_context
         return None
 
 
@@ -71,18 +71,18 @@ class BaseAuditor:
     audit.
 
     BaseAuditor subclasses must define the following:
-    - ``changed_by()`` method that returns a JSON-serializable object of
+    - ``change_context()`` method that returns a JSON-serializable object of
       information for events it knows how to audit (or ``None`` otherwise).
     """
 
-    def changed_by(self, request):
-        raise NotImplementedError("subclasses must implement 'changed_by()'")
+    def change_context(self, request):
+        raise NotImplementedError("change_context() is abstract")
 
 
 class RequestAuditor(BaseAuditor):
     """Auditor class for getting users from authenticated requests."""
 
-    def changed_by(self, request):
+    def change_context(self, request):
         if request is None:
             # cannot provide a request user without a request
             return None
@@ -101,7 +101,7 @@ class SystemUserAuditor(BaseAuditor):
     def __init__(self):
         self.has_who_bin = True
 
-    def changed_by(self, request):
+    def change_context(self, request):
         username = None
         if self.has_who_bin:
             try:

@@ -40,9 +40,9 @@ INSTALLED_APPS = [
 ```
 
 The "auditor chain" (see `FIELD_AUDIT_AUDITORS` in the **Custom settings** table
-below) is configured out of the box with the default auditors. If `changed_by`
-auditing is desired for authenticated Django requests, add the app middleware to
-your Django `MIDDLEWARE` configuration. For example:
+below) is configured out of the box with the default auditors. If
+`change_context` auditing is desired for authenticated Django requests, add the
+app middleware to your Django `MIDDLEWARE` configuration. For example:
 
 ```python
 MIDDLEWARE = [
@@ -52,8 +52,8 @@ MIDDLEWARE = [
 ```
 
 The audit chain can be updated to use custom auditors (subclasses of
-`field_audit.auditors.BaseAuditor`). If `changed_by` auditing is not desired,
-the audit chain can be cleared to avoid extra processing:
+`field_audit.auditors.BaseAuditor`). If `change_context` auditing is not
+desired, the audit chain can be cleared to avoid extra processing:
 
 ```python
 FIELD_AUDIT_AUDITORS = []
@@ -61,10 +61,10 @@ FIELD_AUDIT_AUDITORS = []
 
 #### Custom settings details
 
-| Name                              | Description                                                | Default value when unset
-|:----------------------------------|:-----------------------------------------------------------|:------------------------
-| `FIELD_AUDIT_AUDITEVENT_MANAGER`  | A custom manager to use for the `AuditEvent` Model.        | `field_audit.models.DefaultAuditEventManager`
-| `FIELD_AUDIT_AUDITORS`            | A custom list of auditors for acquiring `changed_by` info. | `["field_audit.auditors.RequestAuditor", "field_audit.auditors.SystemUserAuditor"]`
+| Name                              | Description                                                    | Default value when unset
+|:----------------------------------|:---------------------------------------------------------------|:------------------------
+| `FIELD_AUDIT_AUDITEVENT_MANAGER`  | A custom manager to use for the `AuditEvent` Model.            | `field_audit.models.DefaultAuditEventManager`
+| `FIELD_AUDIT_AUDITORS`            | A custom list of auditors for acquiring `change_context` info. | `["field_audit.auditors.RequestAuditor", "field_audit.auditors.SystemUserAuditor"]`
 
 ### Model Auditing
 

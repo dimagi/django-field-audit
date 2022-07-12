@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                 ('event_date', models.DateTimeField(db_index=True, default=get_date)),  # noqa: E501
                 ('object_class_path', models.CharField(db_index=True, max_length=255)),  # noqa: E501
                 ('object_pk', models.JSONField()),
-                ('changed_by', models.JSONField()),
+                ('change_context', models.JSONField()),
                 ('is_create', models.BooleanField(default=False)),
                 ('is_delete', models.BooleanField(default=False)),
                 ('delta', models.JSONField()),

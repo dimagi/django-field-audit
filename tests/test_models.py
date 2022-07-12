@@ -20,7 +20,7 @@ from field_audit.models import (
 from .models import Aircraft, CrewMember, Flight
 from .test_field_audit import override_audited_models
 
-EVENT_REQ_FIELDS = {"object_pk": 0, "changed_by": {}, "delta": {}}
+EVENT_REQ_FIELDS = {"object_pk": 0, "change_context": {}, "delta": {}}
 
 
 class TestAuditEventManager(TestCase):
@@ -28,9 +28,9 @@ class TestAuditEventManager(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.changed_by = {"user_type": "User", "username": "test"}
+        cls.change_context = {"user_type": "User", "username": "test"}
         fields = EVENT_REQ_FIELDS.copy()
-        fields["changed_by"] = cls.changed_by
+        fields["change_context"] = cls.change_context
         cls.events = [AuditEvent.objects.create(**fields)]
 
     def test_by_type_and_username(self):
@@ -59,15 +59,16 @@ class TestDefaultAuditEventManager(TestCase):
             "username": cls.username,
         }
         req_fields = EVENT_REQ_FIELDS.copy()
-        del req_fields["changed_by"]
+        del req_fields["change_context"]
         cls.tty_events = {
-            AuditEvent.objects.create(changed_by=cls.tty_user, **req_fields)
+            AuditEvent.objects.create(change_context=cls.tty_user, **req_fields)
         }
         cls.proc_events = {
-            AuditEvent.objects.create(changed_by=cls.proc_user, **req_fields)
+            AuditEvent.objects.create(change_context=cls.proc_user,
+                                      **req_fields)
         }
         cls.req_events = {
-            AuditEvent.objects.create(changed_by=cls.req_user, **req_fields)
+            AuditEvent.objects.create(change_context=cls.req_user, **req_fields)
         }
 
     def test_by_system_user(self):
@@ -134,18 +135,18 @@ class TestAuditEvent(TestCase):
 
     class MockAuditor:
 
-        def __init__(self, changed_by):
-            self._changed_by = changed_by
+        def __init__(self, change_context):
+            self._change_context = change_context
 
-        def changed_by(self, request):
-            return self._changed_by
+        def change_context(self, request):
+            return self._change_context
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.changed_by = {"user_type": "User", "username": "test"}
+        cls.change_context = {"user_type": "User", "username": "test"}
         # patch the auditors chain
-        audit_dispatcher.auditors = [cls.MockAuditor(cls.changed_by)]
+        audit_dispatcher.auditors = [cls.MockAuditor(cls.change_context)]
 
     @classmethod
     def tearDownClass(cls):
@@ -204,11 +205,11 @@ class TestAuditEvent(TestCase):
         with self.assertRaises(IntegrityError):
             AuditEvent.objects.create(object_pk=None, **req_fields)
 
-    def test_changed_by_is_not_nullable(self):
+    def test_change_context_is_not_nullable(self):
         req_fields = EVENT_REQ_FIELDS.copy()
-        del req_fields["changed_by"]
+        del req_fields["change_context"]
         with self.assertRaises(IntegrityError):
-            AuditEvent.objects.create(changed_by=None, **req_fields)
+            AuditEvent.objects.create(change_context=None, **req_fields)
 
     def test_delta_not_nullable(self):
         req_fields = EVENT_REQ_FIELDS.copy()
@@ -295,7 +296,7 @@ class TestAuditEvent(TestCase):
             AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
         self.assertEqual(event.object_pk, instance.pk)
-        self.assertEqual(event.changed_by, self.changed_by)
+        self.assertEqual(event.change_context, self.change_context)
         self.assertFalse(event.is_create)
         self.assertFalse(event.is_delete)
         self.assertEqual({"value": {"old": 0, "new": 1}}, event.delta)
@@ -315,7 +316,7 @@ class TestAuditEvent(TestCase):
             event, = AuditEvent.objects.all()
             self.assertEqual(event.object_class_path, "TestModel")
             self.assertEqual(event.object_pk, instance.pk)
-            self.assertEqual(event.changed_by, self.changed_by)
+            self.assertEqual(event.change_context, self.change_context)
             self.assertFalse(event.is_create)
             self.assertFalse(event.is_delete)
             self.assertEqual(
@@ -334,7 +335,7 @@ class TestAuditEvent(TestCase):
         event, = AuditEvent.objects.all()
         self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
-        self.assertEqual(event.changed_by, self.changed_by)
+        self.assertEqual(event.change_context, self.change_context)
         self.assertTrue(event.is_create)
         self.assertFalse(event.is_delete)
         self.assertEqual({"value": {"new": 0}}, event.delta)
@@ -350,7 +351,7 @@ class TestAuditEvent(TestCase):
         event, = AuditEvent.objects.all()
         self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
-        self.assertEqual(event.changed_by, self.changed_by)
+        self.assertEqual(event.change_context, self.change_context)
         self.assertFalse(event.is_create)
         self.assertTrue(event.is_delete)
         self.assertEqual({"value": {"old": 0}}, event.delta)
@@ -369,7 +370,7 @@ class TestAuditEvent(TestCase):
         event, = AuditEvent.objects.all()
         self.assertEqual(event.object_class_path, "TestModel")
         self.assertEqual(event.object_pk, instance.pk)
-        self.assertEqual(event.changed_by, self.changed_by)
+        self.assertEqual(event.change_context, self.change_context)
         self.assertFalse(event.is_create)
         self.assertFalse(event.is_delete)
         self.assertEqual(
@@ -412,7 +413,7 @@ class TestAuditEvent(TestCase):
         ):
             AuditEvent.audit_field_changes(fields, instance, False, False, None)
         event, = AuditEvent.objects.all()
-        self.assertEqual({}, event.changed_by)
+        self.assertEqual({}, event.change_context)
 
     def test_audit_field_changes_saves_nothing_if_no_change(self):
         instance = TestModel(id=1)

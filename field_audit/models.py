@@ -48,7 +48,10 @@ class AuditEventManager(models.Manager):
         """
         # "no cover" note: tests only run on postgres _or_ sqlite, never both
         return self.filter(  # pragma: no cover
-            changed_by__contains={"user_type": user_type, "username": username},
+            change_context__contains={
+                "user_type": user_type,
+                "username": username,
+            },
         )
 
     # "no branch" note: tests only run on postgres _or_ sqlite, never both
@@ -66,8 +69,8 @@ class AuditEventManager(models.Manager):
                 # Oracle and SQLite do not support `contains` queries
                 # see: https://docs.djangoproject.com/en/4.0/topics/db/queries/#std:fieldlookup-jsonfield.contains  # noqa: E501
                 return self.filter(
-                    changed_by__user_type=user_type,
-                    changed_by__username=username,
+                    change_context__user_type=user_type,
+                    change_context__username=username,
                 )
             # "no cover" note: tests only run on postgres _or_ sqlite, never
             # both
@@ -83,8 +86,8 @@ class DefaultAuditEventManager(AuditEventManager):
     def by_system_user(self, username):
         system_types = [USER_TYPE_TTY, USER_TYPE_PROCESS]
         return self.filter(
-            changed_by__user_type__in=system_types,
-            changed_by__username=username,
+            change_context__user_type__in=system_types,
+            change_context__username=username,
         )
 
     def by_tty_user(self, username):
@@ -129,7 +132,7 @@ class AuditEvent(models.Model):
     event_date = models.DateTimeField(default=get_date, db_index=True)
     object_class_path = models.CharField(db_index=True, max_length=255)
     object_pk = models.JSONField()
-    changed_by = models.JSONField()
+    change_context = models.JSONField()
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
     delta = models.JSONField()
@@ -244,11 +247,11 @@ class AuditEvent(models.Model):
         if delta:
             from .auditors import audit_dispatcher
             from .field_audit import get_audited_class_path
-            changed_by = audit_dispatcher.dispatch(request)
+            change_context = audit_dispatcher.dispatch(request)
             cls.objects.create(
                 object_class_path=get_audited_class_path(type(instance)),
                 object_pk=object_pk,
-                changed_by={} if changed_by is None else changed_by,
+                change_context={} if change_context is None else change_context,
                 is_create=is_create,
                 is_delete=is_delete,
                 delta=delta,
