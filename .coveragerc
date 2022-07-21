@@ -1,0 +1,9 @@
+[run]
+branch = True
+source = field_audit
+
+[report]
+omit = 
+  /build/*
+  /example/*
+  /tests/*
