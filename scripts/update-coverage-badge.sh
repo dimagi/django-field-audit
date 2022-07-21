@@ -10,7 +10,7 @@ function main {
         return 1
     fi
     local for_rev=$(git rev-parse --short HEAD)
-    git remote -v
+    git remote -v  # for job output clarity
     git fetch origin "$badge_branch"
     git checkout -b "$badge_branch" "origin/${badge_branch}"
     mv -v .coverage.svg coverage.svg
