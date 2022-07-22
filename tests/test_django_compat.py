@@ -1,4 +1,4 @@
-
+import django
 from django.test import TestCase
 
 from field_audit.models import AuditEvent
@@ -28,18 +28,22 @@ class TestAuditedDbWrites(TestCase):
 
     def test_queryset_bulk_create_is_not_audited(self):
         self.assertNoAuditEvents()
-        instance, = SimpleModel.objects.bulk_create([SimpleModel()])
+        instance, = SimpleModel.objects.bulk_create([SimpleModel(id=1)])
         instance.refresh_from_db()
         self.assertIsNotNone(instance.id)
         self.assertNoAuditEvents()
 
     def test_queryset_bulk_update_is_not_audited(self):
-        instance = SimpleModel.objects.create()
+        instance = SimpleModel.objects.create(id=1)
         AuditEvent.objects.all().delete()  # delete the create audit event
         self.assertIsNone(instance.value)
         instance.value = "test"
         updates = SimpleModel.objects.bulk_update([instance], ["value"])
-        self.assertEqual(1, updates)
+        if django.VERSION[0] < 4:
+            expected_updates = None
+        else:
+            expected_updates = 1
+        self.assertEqual(expected_updates, updates)
         instance.refresh_from_db()
         self.assertEqual("test", instance.value)
         self.assertNoAuditEvents()
