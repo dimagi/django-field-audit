@@ -1,5 +1,10 @@
 # Django Field Audit change log
 
+## v1.1.0 - 2022-07-22
+
+- Add Django compatibility tests.
+- Add auditing support for "special" `QuerySet` write methods
+
 ## v1.0.0 - 2022-05-31
 
 - Remove `FieldChange` model in favor of storing the full delta on the

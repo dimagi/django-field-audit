@@ -1,10 +1,11 @@
 from contextlib import ContextDecorator
 from datetime import datetime, timedelta
+from enum import Enum
 from unittest.mock import patch
 
+from django.conf import settings
 from django.db import models
 from django.db.utils import IntegrityError
-from django.conf import settings
 from django.test import TestCase, override_settings
 
 from field_audit.auditors import audit_dispatcher
@@ -12,13 +13,18 @@ from field_audit.models import (
     USER_TYPE_PROCESS,
     USER_TYPE_REQUEST,
     USER_TYPE_TTY,
+    AttachValuesError,
+    AuditAction,
+    AuditEvent,
+    AuditingQuerySet,
+    InvalidAuditActionError,
+    UnsetAuditActionError,
     get_date,
     get_manager,
-    AttachValuesError,
-    AuditEvent,
+    validate_audit_action,
 )
 
-from .models import Aircraft, CrewMember, Flight
+from .models import Aircraft, CrewMember, Flight, ModelWithAuditingManager
 from .test_field_audit import override_audited_models
 
 EVENT_REQ_FIELDS = {"object_pk": 0, "change_context": {}, "delta": {}}
@@ -444,7 +450,7 @@ class TestAuditEvent(TestCase):
         AuditEvent.attach_initial_values(instance)
         self.assertAuditTablesEmpty()
         AuditEvent.audit_field_changes(instance, False, False, None)
-        self.assertEqual([], list(AuditEvent.objects.all()))
+        self.assertAuditTablesEmpty()
 
     @audit_field_names(TestModel, ["value"])
     def test_audit_field_changes_saves_nothing_on_audit_dispatch_error(self):
@@ -475,6 +481,131 @@ class TestAuditEvent(TestCase):
             AuditEvent.audit_field_changes(instance, False, False, None)
         self.assertAuditTablesEmpty()
 
+    @audit_field_names(TestModel, ["value"])
+    def test_make_audit_event_returns_unsaved_event_for_change(self):
+        instance = TestModel(id=1)
+        AuditEvent.attach_initial_values(instance)
+        instance.value = 1
+        with override_audited_models({TestModel: "TestModel"}):
+            self.assertIsNotNone(AuditEvent.make_audit_event(
+                instance,
+                False,
+                False,
+                None,
+            ))
+        self.assertAuditTablesEmpty()
+
+    @audit_field_names(TestModel, ["value"])
+    def test_make_audit_event_returns_none_for_non_change(self):
+        instance = TestModel(id=1)
+        AuditEvent.attach_initial_values(instance)
+        with override_audited_models({TestModel: "TestModel"}):
+            self.assertIsNone(AuditEvent.make_audit_event(
+                instance,
+                False,
+                False,
+                None,
+            ))
+        self.assertAuditTablesEmpty()
+
     def assertAuditTablesEmpty(self):
         # verify that the audit-related test tables are empty
         self.assertEqual([], list(AuditEvent.objects.all()))
+
+
+class TestValidateAuditAction(TestCase):
+
+    def test_validate_audit_action_audit(self):
+        self._func(audit_action=AuditAction.AUDIT)  # does not raise
+
+    def test_validate_audit_action_ignore(self):
+        self._func(audit_action=AuditAction.IGNORE)  # does not raise
+
+    def test_validate_audit_action_raises_unsetauditactionerror(self):
+        with self.assertRaises(UnsetAuditActionError):
+            self._func()
+
+    def test_validate_audit_action_raises_invalidauditactionerror(self):
+        class Action(Enum):
+            VALUE = object()
+        with self.assertRaises(InvalidAuditActionError):
+            self._func(audit_action=Action.VALUE)
+
+    @validate_audit_action
+    def _func(self, *, audit_action=None):
+        pass
+
+
+class TestAuditingQuerySet(TestCase):
+
+    def test_bulk_create_audit_action_audit_is_not_implemented(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(NotImplementedError):
+            queryset.bulk_create([], audit_action=AuditAction.AUDIT)
+
+    def test_bulk_create_audit_action_ignore_calls_super(self):
+        queryset = AuditingQuerySet()
+        items = object()
+        with patch.object(models.QuerySet, "bulk_create") as super_meth:
+            queryset.bulk_create(items, audit_action=AuditAction.IGNORE)
+            super_meth.assert_called_with(items)
+
+    def test_bulk_update_audit_action_audit_is_not_implemented(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(NotImplementedError):
+            queryset.bulk_update([], audit_action=AuditAction.AUDIT)
+
+    def test_bulk_update_audit_action_ignore_calls_super(self):
+        queryset = AuditingQuerySet()
+        items = object()
+        with patch.object(models.QuerySet, "bulk_update") as super_meth:
+            queryset.bulk_update(items, audit_action=AuditAction.IGNORE)
+            super_meth.assert_called_with(items)
+
+    def test_delete_audit_action_audit_deletes_and_creates_audit_events(self):
+        for pkey in range(2):
+            ModelWithAuditingManager.objects.create(
+                id=pkey,
+                value="odd" if pkey % 2 else "even",
+            )
+        queryset = ModelWithAuditingManager.objects.filter(value="even")
+        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
+        queryset.delete(audit_action=AuditAction.AUDIT)
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(1, instance.id)
+        self.assertEqual("odd", instance.value)
+        event, = AuditEvent.objects.filter(is_delete=True)
+        self.assertEqual(0, event.object_pk)
+        self.assertEqual(True, event.is_delete)
+        self.assertEqual(
+            "tests.models.ModelWithAuditingManager",
+            event.object_class_path,
+        )
+        self.assertEqual(
+            {"id": {"old": 0}, "value": {"old": "even"}},
+            event.delta,
+        )
+
+    def test_delete_audit_action_audit_noop_with_empty_queryset(self):
+        queryset = ModelWithAuditingManager.objects.all()
+        self.assertEqual([], list(queryset))
+        queryset.delete(audit_action=AuditAction.AUDIT)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
+
+    def test_delete_audit_action_ignore_calls_super(self):
+        queryset = AuditingQuerySet()
+        with patch.object(models.QuerySet, "delete") as super_meth:
+            queryset.delete(audit_action=AuditAction.IGNORE)
+            super_meth.assert_called()
+
+    def test_update_audit_action_audit_is_not_implemented(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(NotImplementedError):
+            queryset.update([], audit_action=AuditAction.AUDIT)
+
+    def test_update_audit_action_ignore_calls_super(self):
+        queryset = AuditingQuerySet()
+        items = object()
+        with patch.object(models.QuerySet, "update") as super_meth:
+            queryset.update(items, audit_action=AuditAction.IGNORE)
+            super_meth.assert_called_with(items)
