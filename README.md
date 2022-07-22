@@ -87,6 +87,47 @@ class Aircraft(models.Model):
     operated_by = models.CharField(max_length=64)
 ```
 
+#### Audited DB write operations
+
+By default, Model and QuerySet methods are audited, with the exception of four
+"special" QuerySet methods:
+
+| DB Write Method               | Audited
+|:------------------------------|:-------
+| `Model.delete()`              | Yes
+| `Model.save()`                | Yes
+| `QuerySet.bulk_create()`      | No
+| `QuerySet.bulk_update()`      | No
+| `QuerySet.create()`           | Yes (via `Model.save()`)
+| `QuerySet.delete()`           | No
+| `QuerySet.get_or_create()`    | Yes (via `QuerySet.create()`)
+| `QuerySet.update()`           | No
+| `QuerySet.update_or_create()` | Yes (via `QuerySet.get_or_create()` and `Model.save()`)
+
+#### Auditing Special QuerySet Writes
+
+Auditing for the four "special" QuerySet methods that perform DB writes (labeled
+**No** in the table above) _can_ be enabled. This requires three extra usage
+details:
+
+1. Enable the feature by calling the audit decorator specifying
+   `@audit_fields(..., audit_special_queryset_writes=True)`.
+2. Configure the model class so its default manager is an instance of
+   `field_audit.models.AuditingManager`.
+3. All calls to the four "special" QuerySet write methods require an extra
+   `audit_action` keyword argument whose value is one of:
+   - `field_audit.models.AuditAction.AUDIT`
+   - `field_audit.models.AuditAction.IGNORE`
+
+**Important Note**: at this time, only the `QuerySet.delete()` "special" write
+method can actually perform change auditing when called with
+`audit_action=AuditAction.AUDIT`. The other three methods are currently not
+implemented and will raise `NotImplementedError` if called with that action.
+Implementing these remaining methods remains a task for the future, see **TODO**
+below. All four methods do support `audit_action=AuditAction.IGNORE` usage,
+however.
+
+
 ### Using with SQLite
 
 This app uses Django's `JSONField` which means if you intend to use the app with
@@ -154,10 +195,12 @@ twine upload dist/*
 ## TODO
 
 - Write backfill migration utility / management command.
-- Add support for `QuerySet` write operations (`update()`, etc).
+- Implement auditing for the remaining "special" QuerySet write operations:
+  - `bulk_create()`
+  - `bulk_update()`
+  - `update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
-- Write `test_library.py` functional test module for entire library.
 
 ### Backlog
 

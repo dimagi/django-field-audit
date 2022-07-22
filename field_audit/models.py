@@ -1,4 +1,6 @@
 from datetime import datetime
+from enum import Enum
+from functools import wraps
 
 from django.conf import settings
 from django.db import models
@@ -147,7 +149,25 @@ class AuditEvent(models.Model):
             ),
         ]
 
+    ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
     ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
+
+    @classmethod
+    def attach_field_names(cls, model_class, field_names):
+        """Attaches a collection of field names to a Model class for auditing.
+
+        :param model_class: a Django Model class under audit
+        :param field_names: collection of field names to audit on the model
+        """
+        setattr(model_class, cls.ATTACH_FIELD_NAMES_AT, field_names)
+
+    @classmethod
+    def _field_names(cls, instance):
+        """Returns the audit field names stored on the model instance's class
+
+        :param instance: instance of a Model subclass being audited for changes
+        """
+        return getattr(instance.__class__, cls.ATTACH_FIELD_NAMES_AT)
 
     @staticmethod
     def get_field_value(instance, field_name):
@@ -160,13 +180,11 @@ class AuditEvent(models.Model):
         return field.to_python(field.value_from_object(instance))
 
     @classmethod
-    def attach_initial_values(cls, field_names, instance):
+    def attach_initial_values(cls, instance):
         """Save copies of field values on an instance so they can be used later
         to determine if the instance has changed and record what the previous
         values were.
 
-        :param field_names: a collection of names of fields on ``instance``
-            to attach for later auditing
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance
@@ -178,16 +196,15 @@ class AuditEvent(models.Model):
                 f"refusing to overwrite {cls.ATTACH_INIT_VALUES_AT!r} "
                 f"on model instance: {instance}"
             )
+        field_names = cls._field_names(instance)
         init_values = {f: cls.get_field_value(instance, f) for f in field_names}
         setattr(instance, cls.ATTACH_INIT_VALUES_AT, init_values)
 
     @classmethod
-    def reset_initial_values(cls, field_names, instance):
+    def reset_initial_values(cls, instance):
         """Returns the previously attached "initial values" and attaches new
         values.
 
-        :param field_names: a collection of names of fields on ``instance``
-            attach for later auditing
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are not attached to
             the instance
@@ -197,17 +214,27 @@ class AuditEvent(models.Model):
         except AttributeError:
             raise AttachValuesError("cannot reset values that were never set")
         delattr(instance, cls.ATTACH_INIT_VALUES_AT)
-        cls.attach_initial_values(field_names, instance)
+        cls.attach_initial_values(instance)
         return values
 
     @classmethod
-    def audit_field_changes(cls, field_names, instance, is_create, is_delete,
-                            request, object_pk=None):
+    def audit_field_changes(cls, *args, **kw):
+        """Convenience method that calls ``make_audit_event()`` and saves the
+        event (if one is returned).
+
+        All args/kw passed directly to ``make_audit_event()``, see that method
+        for usage.
+        """
+        event = cls.make_audit_event(*args, **kw)
+        if event is not None:
+            event.save()
+
+    @classmethod
+    def make_audit_event(cls, instance, is_create, is_delete,
+                         request, object_pk=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
-        :param field_names: a collection of names of fields on ``instance`` to
-            audit for changes
         :param instance: instance of a Model subclass to be audited for changes
         :param is_create: whether or not the audited event creates a new DB
             record (setting ``True`` implies that ``instance`` is changing)
@@ -219,6 +246,8 @@ class AuditEvent(models.Model):
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
+        :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
+            ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
         """
         if not is_delete:
@@ -228,9 +257,9 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
-        init_values = cls.reset_initial_values(field_names, instance)
+        init_values = cls.reset_initial_values(instance)
         delta = {}
-        for field_name in field_names:
+        for field_name in cls._field_names(instance):
             value = cls.get_field_value(instance, field_name)
             if is_create:
                 delta[field_name] = {"new": value}
@@ -248,7 +277,7 @@ class AuditEvent(models.Model):
             from .auditors import audit_dispatcher
             from .field_audit import get_audited_class_path
             change_context = audit_dispatcher.dispatch(request)
-            cls.objects.create(
+            return cls(
                 object_class_path=get_audited_class_path(type(instance)),
                 object_pk=object_pk,
                 change_context={} if change_context is None else change_context,
@@ -264,3 +293,122 @@ class AuditEvent(models.Model):
 
 class AttachValuesError(Exception):
     """Attaching initial values to a Model instance failed."""
+
+
+class InvalidAuditActionError(Exception):
+    """A special QuerySet write method was called with non-AuditAction enum."""
+
+
+class UnsetAuditActionError(Exception):
+    """A special QuerySet write method was called without an audit action."""
+
+
+class AuditAction(Enum):
+
+    AUDIT = object()
+    IGNORE = object()
+    RAISE = object()
+
+    def __repr__(self):  # pragma: no cover
+        return f"<{type(self).__name__}.{self.name}>"
+
+
+def validate_audit_action(func):
+    """Decorator that performs validation on the ``audit_action`` keyword arg.
+
+    :raises: ``InvalidAuditActionError`` or ``UnsetAuditActionError``
+    """
+    @wraps(func)
+    def wrapper(self, *args, audit_action=AuditAction.RAISE, **kw):
+        if audit_action not in AuditAction:
+            raise InvalidAuditActionError(
+                "The 'audit_action' argument must be a value of 'AuditAction', "
+                f"got {type(audit_action)!r}"
+            )
+        if audit_action is AuditAction.RAISE:
+            raise UnsetAuditActionError(
+                f"{type(self).__name__}.{func.__name__}() requires an audit "
+                "action"
+            )
+        return func(self, *args, audit_action=audit_action, **kw)
+    return wrapper
+
+
+class AuditingQuerySet(models.QuerySet):
+    """A QuerySet that can perform field change auditing for bulk write methods.
+
+    When decorating a model class with
+    ``@audit_fields(..., audit_special_queryset_writes=True)``, the model's
+    default manager must be a subclass of ``AuditingManager``.  Doing so
+    provides the required extra auditing logic for the following methods:
+
+    - ``bulk_create()``
+    - ``bulk_update()``
+    - ``delete()``
+    - ``update()``
+
+    Each of these methods has an additional required keyword argument
+    ``audit_action`` which defaults to ``AuditAction.RAISE``.  When calling one
+    of the above methods, the value must be explicitly set to one of:
+
+    - ``AuditAction.AUDIT`` -- perform the database write, creating audit events
+        for the changes.
+    - ``AuditAction.IGNORE`` -- perform the database write without performing
+        any auditing logic (pass through).
+
+    Calling one of these methods without setting the desired audit action will
+    raise an exception.
+    """
+
+    @validate_audit_action
+    def bulk_create(self, *args, audit_action=AuditAction.RAISE, **kw):
+        if audit_action is AuditAction.IGNORE:
+            return super().bulk_create(*args, **kw)
+        else:
+            raise NotImplementedError(
+                "Change auditing is not implemented for bulk_create()."
+            )
+
+    @validate_audit_action
+    def bulk_update(self, *args, audit_action=AuditAction.RAISE, **kw):
+        if audit_action is AuditAction.IGNORE:
+            return super().bulk_update(*args, **kw)
+        else:
+            raise NotImplementedError(
+                "Change auditing is not implemented for bulk_update()."
+            )
+
+    @validate_audit_action
+    def delete(self, *, audit_action=AuditAction.RAISE):
+        if audit_action is AuditAction.IGNORE:
+            return super().delete()
+        assert audit_action is AuditAction.AUDIT, audit_action
+        from .field_audit import request
+        request = request.get()
+        audit_events = []
+        for instance in self:
+            # make_audit_event() will never return None because delete=True
+            audit_events.append(AuditEvent.make_audit_event(
+                instance,
+                False,
+                True,
+                request,
+                instance.pk,
+            ))
+        value = super().delete()
+        if audit_events:
+            # write the audit events _after_ the delete succeeds
+            AuditEvent.objects.bulk_create(audit_events)
+        return value
+
+    @validate_audit_action
+    def update(self, *args, audit_action=AuditAction.RAISE, **kw):
+        if audit_action is AuditAction.IGNORE:
+            return super().update(*args, **kw)
+        else:
+            raise NotImplementedError(
+                "Change auditing is not implemented for update()."
+            )
+
+
+AuditingManager = models.Manager.from_queryset(AuditingQuerySet)
