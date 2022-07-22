@@ -51,7 +51,7 @@ class TestFieldAudit(TestCase):
         def invalid(self):
             pass
         with self.assertRaises(ValueError):
-            invalid = _decorate_db_write(invalid, ["field"])
+            _decorate_db_write(invalid)
 
     def test_audit_fields_adds_audited_models(self):
         with override_audited_models():

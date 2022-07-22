@@ -147,7 +147,25 @@ class AuditEvent(models.Model):
             ),
         ]
 
+    ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
     ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
+
+    @classmethod
+    def attach_field_names(cls, model_class, field_names):
+        """Attaches a collection of field names to a Model class for auditing.
+
+        :param model_class: a Django Model class under audit
+        :param field_names: collection of field names to audit on the model
+        """
+        setattr(model_class, cls.ATTACH_FIELD_NAMES_AT, field_names)
+
+    @classmethod
+    def _field_names(cls, instance):
+        """Returns the audit field names stored on the model instance's class
+
+        :param instance: instance of a Model subclass being audited for changes
+        """
+        return getattr(instance.__class__, cls.ATTACH_FIELD_NAMES_AT)
 
     @staticmethod
     def get_field_value(instance, field_name):
@@ -160,13 +178,11 @@ class AuditEvent(models.Model):
         return field.to_python(field.value_from_object(instance))
 
     @classmethod
-    def attach_initial_values(cls, field_names, instance):
+    def attach_initial_values(cls, instance):
         """Save copies of field values on an instance so they can be used later
         to determine if the instance has changed and record what the previous
         values were.
 
-        :param field_names: a collection of names of fields on ``instance``
-            to attach for later auditing
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance
@@ -178,16 +194,15 @@ class AuditEvent(models.Model):
                 f"refusing to overwrite {cls.ATTACH_INIT_VALUES_AT!r} "
                 f"on model instance: {instance}"
             )
+        field_names = cls._field_names(instance)
         init_values = {f: cls.get_field_value(instance, f) for f in field_names}
         setattr(instance, cls.ATTACH_INIT_VALUES_AT, init_values)
 
     @classmethod
-    def reset_initial_values(cls, field_names, instance):
+    def reset_initial_values(cls, instance):
         """Returns the previously attached "initial values" and attaches new
         values.
 
-        :param field_names: a collection of names of fields on ``instance``
-            attach for later auditing
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are not attached to
             the instance
@@ -197,17 +212,15 @@ class AuditEvent(models.Model):
         except AttributeError:
             raise AttachValuesError("cannot reset values that were never set")
         delattr(instance, cls.ATTACH_INIT_VALUES_AT)
-        cls.attach_initial_values(field_names, instance)
+        cls.attach_initial_values(instance)
         return values
 
     @classmethod
-    def audit_field_changes(cls, field_names, instance, is_create, is_delete,
+    def audit_field_changes(cls, instance, is_create, is_delete,
                             request, object_pk=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
-        :param field_names: a collection of names of fields on ``instance`` to
-            audit for changes
         :param instance: instance of a Model subclass to be audited for changes
         :param is_create: whether or not the audited event creates a new DB
             record (setting ``True`` implies that ``instance`` is changing)
@@ -228,9 +241,9 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
-        init_values = cls.reset_initial_values(field_names, instance)
+        init_values = cls.reset_initial_values(instance)
         delta = {}
-        for field_name in field_names:
+        for field_name in cls._field_names(instance):
             value = cls.get_field_value(instance, field_name)
             if is_create:
                 delta[field_name] = {"new": value}

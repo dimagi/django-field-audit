@@ -42,39 +42,39 @@ def audit_fields(*field_names, class_path=None):
             raise AlreadyAudited(cls)
         if not issubclass(cls, models.Model):
             raise ValueError(f"expected Model subclass, got: {cls}")
-        cls.__init__ = _decorate_init(cls.__init__, field_names)
-        cls.save = _decorate_db_write(cls.save, field_names)
-        cls.delete = _decorate_db_write(cls.delete, field_names)
+        AuditEvent.attach_field_names(cls, field_names)
+        cls.__init__ = _decorate_init(cls.__init__)
+        cls.save = _decorate_db_write(cls.save)
+        cls.delete = _decorate_db_write(cls.delete)
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
     if not field_names:
         raise ValueError("at least one field name is required")
+    from .models import AuditEvent
     return wrapper
 
 
-def _decorate_init(init, field_names):
+def _decorate_init(init):
     """Decorates the "initialization" (e.g. __init__) method on Model
     subclasses. Responsible for ensuring that the initial field values are
     recorded in order to generate an audit event change delta later.
 
     :param init: the  method to decorate
-    :param field_names: names of fields on the model that need to be audited
     """
     @wraps(init)
     def wrapper(self, *args, **kw):
         init(self, *args, **kw)
-        AuditEvent.attach_initial_values(field_names, self)
+        AuditEvent.attach_initial_values(self)
     from .models import AuditEvent
     return wrapper
 
 
-def _decorate_db_write(func, field_names):
+def _decorate_db_write(func):
     """Decorates the "database write" methods (e.g. save, delete) on Model
     subclasses. Responsible for creating an audit event when a model instance
     changes.
 
     :param func: the "db write" method to decorate
-    :param field_names: names of fields on the model that need to be audited
     """
     @wraps(func)
     def wrapper(self, *args, **kw):
@@ -85,7 +85,6 @@ def _decorate_db_write(func, field_names):
         object_pk = self.pk if is_delete else None
         ret = func(self, *args, **kw)
         AuditEvent.audit_field_changes(
-            field_names,
             self,
             is_create,
             is_delete,
