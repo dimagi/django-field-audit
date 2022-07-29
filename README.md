@@ -87,6 +87,35 @@ class Aircraft(models.Model):
     operated_by = models.CharField(max_length=64)
 ```
 
+#### Bootstrap events for models with existing records
+
+In the scenario where auditing is enabled for a model with existing data, it can
+be valuable to generate "bootstrap" audit events for all of the existing model
+records in order to ensure that there is at least one audit event record for
+every model instance that currently exists.  There is a migration utility for
+performing this bootstrap operation. Example code:
+
+```python
+# flight/migrations/0002_bootstrap_aircarft_auditing.py
+
+from django.db import migrations, models
+from field_audit.utils import run_bootstrap
+
+from flight.models import Aircraft
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('flight', '0001_initial'),
+    ]
+
+    operations = [
+        run_bootstrap(Aircraft, ["tail_number", "make_model", "operated_by"])
+    ]
+```
+
+
 ### Using with SQLite
 
 This app uses Django's `JSONField` which means if you intend to use the app with
@@ -153,7 +182,6 @@ twine upload dist/*
 
 ## TODO
 
-- Write backfill migration utility / management command.
 - Add support for `QuerySet` write operations (`update()`, etc).
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.

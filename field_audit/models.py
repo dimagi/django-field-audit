@@ -1,4 +1,5 @@
 from datetime import datetime
+from itertools import islice
 
 from django.conf import settings
 from django.db import models
@@ -261,6 +262,53 @@ class AuditEvent(models.Model):
                 is_delete=is_delete,
                 delta=delta,
             )
+
+    @classmethod
+    def bootstrap_existing_model_records(cls, model_class, field_names,
+                                         batch_size=None):
+        """Creates audit events for all existing records of ``model_class``.
+
+        :param model_class: a subclass of ``django.db.models.Model`` that uses
+            the ``audit_fields()`` decorator.
+        :param field_names: a collection of field names to include in the
+            resulting audit event ``delta`` value.
+        :param batch_size: (optional) create bootstrap records in batches of
+            ``batch_size``. If ``None`` (the default), no batching is performed.
+        :returns: number of bootstrap records created
+        """
+        from .auditors import audit_dispatcher
+        from .field_audit import get_audited_class_path
+
+        def iter_events():
+            for instance in model_class._default_manager.all():
+                delta = {}
+                for field_name in field_names:
+                    value = cls.get_field_value(instance, field_name)
+                    delta[field_name] = {"new": value}
+                yield cls(
+                    object_class_path=object_class_path,
+                    object_pk=instance.pk,
+                    change_context=change_context,
+                    is_bootstrap=True,
+                    delta=delta,
+                )
+
+        change_context = audit_dispatcher.dispatch(None)
+        object_class_path = get_audited_class_path(model_class)
+
+        if batch_size is None:
+            return len(cls.objects.bulk_create(iter_events()))
+        # bulk_create in batches efficiently
+        # see: https://docs.djangoproject.com/en/4.0/ref/models/querysets/#bulk-create  # noqa: E501
+        events = iter_events()
+        total = 0
+        while True:
+            batch = list(islice(events, batch_size))
+            if not batch:
+                break
+            total += len(batch)
+            cls.objects.bulk_create(batch, batch_size=batch_size)
+        return total
 
     def __repr__(self):  # pragma: no cover
         cls_name = type(self).__name__

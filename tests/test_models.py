@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from django.db import models, transaction
 from django.db.utils import IntegrityError
@@ -17,7 +17,7 @@ from field_audit.models import (
     AuditEvent,
 )
 
-from .models import Aircraft, CrewMember, Flight
+from .models import Aerodrome, Aircraft, CrewMember, Flight
 from .test_field_audit import override_audited_models
 
 EVENT_REQ_FIELDS = {"object_pk": 0, "change_context": {}, "delta": {}}
@@ -483,3 +483,62 @@ class TestModel(models.Model):
     __test__ = False  # this is not a test
     value = models.IntegerField(null=True)
     other = models.IntegerField(null=True)
+
+
+class TestAuditEventBootstrapping(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.aerodrome_details = {
+            "KIAD": 313,
+            "VIDP": 777,
+            "FACT": 151,
+        }
+        for icao, amsl in cls.aerodrome_details.items():
+            Aerodrome.objects.create(
+                icao=icao,
+                elevation_amsl=amsl,
+                amsl_unit="ft",
+            )
+
+    def test_bootstrap_existing_model_records(self):
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            self._verify_bootstrap_existing_model_records(None)
+            mock.assert_called_once_with(ANY)
+
+    def test_bootstrap_existing_model_records_batched(self):
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            self._verify_bootstrap_existing_model_records(1)
+            self.assertEqual(len(self.aerodrome_details), mock.call_count)
+            mock.assert_called_with(ANY, batch_size=1)
+
+    def _verify_bootstrap_existing_model_records(self, batch_size):
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        self.assertEqual(
+            len(self.aerodrome_details),
+            AuditEvent.bootstrap_existing_model_records(
+                Aerodrome,
+                ["icao", "elevation_amsl", "amsl_unit"],
+                batch_size,
+            ),
+        )
+        check_details = self.aerodrome_details.copy()
+        for event in AuditEvent.objects.filter(is_bootstrap=True):
+            self.assertEqual(event.object_class_path, "tests.models.Aerodrome")
+            self.assertFalse(event.is_create)
+            self.assertFalse(event.is_delete)
+            self.assertTrue(event.is_bootstrap)
+            icao = event.delta["icao"]["new"]
+            elevation_amsl = check_details.pop(icao)  # doesn't raise KeyError
+            self.assertEqual(
+                {
+                    "icao": {"new": icao},
+                    "elevation_amsl": {"new": elevation_amsl},
+                    "amsl_unit": {"new": "ft"},
+                },
+                event.delta,
+            )
+        self.assertEqual({}, check_details)

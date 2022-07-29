@@ -1,5 +1,10 @@
+import logging
+
 from django.core.exceptions import ImproperlyConfigured
+from django.db.migrations import RunPython
 from django.utils.module_loading import import_string
+
+log = logging.getLogger(__name__)
 
 
 def class_import_helper(dotted_path, item_description, require_type=None):
@@ -45,3 +50,27 @@ def get_fqcn(cls):
     See: https://stackoverflow.com/a/2020083
     """
     return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def run_bootstrap(model_class, field_names, batch_size=None,
+                  reverse_func=RunPython.noop):
+    """Returns a django migration Operation which calls the
+    ``bootstrap_existing_model()`` utility to add "migration" records for
+    existing models.
+
+    :param model_class: see ``field_audit.utils.bootstrap_existing_model``
+    :param field_names: see ``field_audit.utils.bootstrap_existing_model``
+    :param batch_size: see ``field_audit.utils.bootstrap_existing_model``
+    :param reverse_func: (optional, default: ``RunPython.noop``) a callable for
+        unapplying the migration. Passed directly to the returned
+        ``RunPython()`` instance as the ``reverse_code`` argument.
+    """
+    def wrapper(*args, **kwargs):
+        from .models import AuditEvent
+        count = AuditEvent.bootstrap_existing_model_records(
+            model_class,
+            field_names,
+            batch_size,
+        )
+        log.info(f"boostrapped {count} audit event(s) for model: {model_class}")
+    return RunPython(wrapper, reverse_code=reverse_func)
