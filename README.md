@@ -92,7 +92,7 @@ class Aircraft(models.Model):
 This app uses Django's `JSONField` which means if you intend to use the app with
 a SQLite database, the SQLite `JSON1` extension is required. If your system's
 Python `sqlite3` library doesn't ship with this extension enabled, see
-[this article]((https://code.djangoproject.com/wiki/JSON1Extension)) for details
+[this article](https://code.djangoproject.com/wiki/JSON1Extension) for details
 on how to enable it.
 
 
