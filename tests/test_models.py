@@ -548,3 +548,30 @@ class TestAuditEventBootstrapping(TestCase):
                 event.delta,
             )
         self.assertEqual({}, check_details)
+
+    def test_bootstrap_existing_model_without_records(self):
+        self.assertEqual([], list(Aircraft.objects.all()))
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_events = AuditEvent.bootstrap_existing_model_records(
+                Aircraft,
+                ["tail_number"],
+            )
+            mock.assert_called_once_with(ANY)
+        self.assertEqual(0, created_events)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+
+    def test_bootstrap_existing_model_without_records_batched(self):
+        self.assertEqual([], list(Aircraft.objects.all()))
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_events = AuditEvent.bootstrap_existing_model_records(
+                Aircraft,
+                ["tail_number"],
+                batch_size=1,
+            )
+            mock.assert_not_called()
+        self.assertEqual(0, created_events)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
