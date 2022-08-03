@@ -54,14 +54,18 @@ def get_fqcn(cls):
 
 def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
                   reverse_func=RunPython.noop):
-    """Returns a django migration Operation which calls the
-    ``bootstrap_existing_model()`` utility to add "migration" records for
-    existing models.
+    """Returns a django migration Operation which calls
+    ``AuditEvent.bootstrap_existing_model_records()`` to add "migration" records
+    for existing model records.
 
-    :param model_class: see ``field_audit.utils.bootstrap_existing_model``
-    :param field_names: see ``field_audit.utils.bootstrap_existing_model``
-    :param batch_size: see ``field_audit.utils.bootstrap_existing_model``
-    :param iter_records:  see ``field_audit.utils.bootstrap_existing_model``
+    :param model_class: see
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
+    :param field_names: see
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
+    :param batch_size: see
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
+    :param iter_records:  see
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
     :param reverse_func: (optional, default: ``RunPython.noop``) a callable for
         unapplying the migration. Passed directly to the returned
         ``RunPython()`` instance as the ``reverse_code`` argument.
