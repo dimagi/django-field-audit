@@ -503,30 +503,36 @@ class TestAuditEventBootstrapping(TestCase):
             )
 
     def test_bootstrap_existing_model_records(self):
-        with patch.object(AuditEvent.objects, "bulk_create",
-                          side_effect=AuditEvent.objects.bulk_create) as mock:
-            self._verify_bootstrap_existing_model_records(None)
-            mock.assert_called_once_with(ANY)
-
-    def test_bootstrap_existing_model_records_batched(self):
-        with patch.object(AuditEvent.objects, "bulk_create",
-                          side_effect=AuditEvent.objects.bulk_create) as mock:
-            self._verify_bootstrap_existing_model_records(1)
-            self.assertEqual(len(self.aerodrome_details), mock.call_count)
-            mock.assert_called_with(ANY, batch_size=1)
-
-    def _verify_bootstrap_existing_model_records(self, batch_size):
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
-        self.assertEqual(
-            len(self.aerodrome_details),
-            AuditEvent.bootstrap_existing_model_records(
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
                 Aerodrome,
                 ["icao", "elevation_amsl", "amsl_unit"],
-                batch_size,
-            ),
-        )
+            )
+            mock.assert_called_once_with(ANY)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def test_bootstrap_existing_model_records_batched(self):
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
+                Aerodrome,
+                ["icao", "elevation_amsl", "amsl_unit"],
+                batch_size=1,
+            )
+            self.assertEqual(created_count, mock.call_count)
+            mock.assert_called_with(ANY, batch_size=1)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def _assert_bootstrap_records_match_setup_records(self, bootstrap_events):
         check_details = self.aerodrome_details.copy()
-        for event in AuditEvent.objects.filter(is_bootstrap=True):
+        for event in bootstrap_events:
             self.assertEqual(event.object_class_path, "tests.models.Aerodrome")
             self.assertFalse(event.is_create)
             self.assertFalse(event.is_delete)
