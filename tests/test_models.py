@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, Mock, patch
 
 from django.db import models, transaction
 from django.db.utils import IntegrityError
@@ -526,6 +526,26 @@ class TestAuditEventBootstrapping(TestCase):
             )
             self.assertEqual(created_count, mock.call_count)
             mock.assert_called_with(ANY, batch_size=1)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def test_bootstrap_existing_model_records_with_custom_iterator(self):
+
+        def custom_iterator():
+            first = Aerodrome.objects.first()
+            yield first
+            for instance in Aerodrome.objects.exclude(icao=first.icao):
+                yield instance
+
+        mock = Mock(wraps=custom_iterator)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        created_count = AuditEvent.bootstrap_existing_model_records(
+            Aerodrome,
+            ["icao", "elevation_amsl", "amsl_unit"],
+            iter_records=mock
+        )
+        mock.assert_called_once()
         bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
         self.assertEqual(len(bootstrap_events), created_count)
         self._assert_bootstrap_records_match_setup_records(bootstrap_events)

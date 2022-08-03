@@ -265,7 +265,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
-                                         batch_size=None):
+                                         batch_size=None, iter_records=None):
         """Creates audit events for all existing records of ``model_class``.
 
         :param model_class: a subclass of ``django.db.models.Model`` that uses
@@ -274,13 +274,19 @@ class AuditEvent(models.Model):
             resulting audit event ``delta`` value.
         :param batch_size: (optional) create bootstrap records in batches of
             ``batch_size``. If ``None`` (the default), no batching is performed.
+        :param iter_records: a callable used to fetch model instances.
+            If ``None`` (the default), ``.all().iterator()`` is called on the
+            model's default manager.
         :returns: number of bootstrap records created
         """
         from .auditors import audit_dispatcher
         from .field_audit import get_audited_class_path
 
+        if iter_records is None:
+            iter_records = model_class._default_manager.all().iterator
+
         def iter_events():
-            for instance in model_class._default_manager.all():
+            for instance in iter_records():
                 delta = {}
                 for field_name in field_names:
                     value = cls.get_field_value(instance, field_name)

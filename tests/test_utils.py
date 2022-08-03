@@ -71,7 +71,7 @@ class TestRunBootstrapExistingModel(SimpleTestCase):
     def test_run_bootstrap(self):
         def reverse():
             return None
-        bootstrap_args = (Flight, ["field"], None)
+        bootstrap_args = (Flight, ["field"], None, None)
         migration_op = run_bootstrap(*bootstrap_args, reverse_func=reverse)
         self.assertIsInstance(migration_op, RunPython)
         self.assertIs(reverse, migration_op.reverse_code)
