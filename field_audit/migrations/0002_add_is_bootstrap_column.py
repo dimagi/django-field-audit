@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='auditevent',
             name='is_bootstrap',
-            field=models.BooleanField(db_index=True, default=False),
+            field=models.BooleanField(default=False),
         ),
         migrations.AddConstraint(
             model_name='auditevent',

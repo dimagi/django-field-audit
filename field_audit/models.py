@@ -136,7 +136,7 @@ class AuditEvent(models.Model):
     change_context = models.JSONField()
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
-    is_bootstrap = models.BooleanField(default=False, db_index=True)
+    is_bootstrap = models.BooleanField(default=False)
     delta = models.JSONField()
 
     objects = get_manager("AUDITEVENT_MANAGER", DefaultAuditEventManager)
