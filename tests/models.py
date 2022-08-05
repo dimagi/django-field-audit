@@ -12,6 +12,20 @@ from django.db.models import (
 )
 
 from field_audit import audit_fields
+from field_audit.models import AuditingManager
+
+
+@audit_fields("id", "value")
+class SimpleModel(Model):
+    id = AutoField(primary_key=True)
+    value = CharField(max_length=8, null=True)
+
+
+@audit_fields("id", "value", audit_special_queryset_writes=True)
+class ModelWithAuditingManager(Model):
+    id = AutoField(primary_key=True)
+    value = CharField(max_length=8, null=True)
+    objects = AuditingManager()
 
 
 @audit_fields("name", "title", "flight_hours")
