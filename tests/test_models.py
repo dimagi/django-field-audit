@@ -1,10 +1,10 @@
 from contextlib import ContextDecorator
 from datetime import datetime, timedelta
 from enum import Enum
-from unittest.mock import patch
+from unittest.mock import ANY, Mock, patch
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.db.utils import IntegrityError
 from django.test import TestCase, override_settings
 
@@ -24,7 +24,13 @@ from field_audit.models import (
     validate_audit_action,
 )
 
-from .models import Aircraft, CrewMember, Flight, ModelWithAuditingManager
+from .models import (
+    Aerodrome,
+    Aircraft,
+    CrewMember,
+    Flight,
+    ModelWithAuditingManager,
+)
 from .test_field_audit import override_audited_models
 
 EVENT_REQ_FIELDS = {"object_pk": 0, "change_context": {}, "delta": {}}
@@ -252,19 +258,42 @@ class TestAuditEvent(TestCase):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
         self.assertFalse(event.is_delete)
 
-    def test_is_create_and_is_delete_exclusive_constraint(self):
+    def test_is_bootstrap_defaults_false(self):
+        event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
+        self.assertFalse(event.is_bootstrap)
+
+    def test_is_create_or_is_delete_or_is_bootstrap_exclusive_constraint(self):
         event = AuditEvent.objects.create(is_create=True, **EVENT_REQ_FIELDS)
         # ^ doesn't raise
         self.assertTrue(event.is_create)
         self.assertFalse(event.is_delete)
+        self.assertFalse(event.is_bootstrap)
         event = AuditEvent.objects.create(is_delete=True, **EVENT_REQ_FIELDS)
         # ^ doesn't raise
         self.assertFalse(event.is_create)
         self.assertTrue(event.is_delete)
-        with self.assertRaises(IntegrityError):
+        self.assertFalse(event.is_bootstrap)
+        event = AuditEvent.objects.create(is_bootstrap=True, **EVENT_REQ_FIELDS)
+        # ^ doesn't raise
+        self.assertFalse(event.is_create)
+        self.assertFalse(event.is_delete)
+        self.assertTrue(event.is_bootstrap)
+        with transaction.atomic(), self.assertRaises(IntegrityError):
             AuditEvent.objects.create(
                 is_create=True,
                 is_delete=True,
+                **EVENT_REQ_FIELDS,
+            )
+        with transaction.atomic(), self.assertRaises(IntegrityError):
+            AuditEvent.objects.create(
+                is_create=True,
+                is_bootstrap=True,
+                **EVENT_REQ_FIELDS,
+            )
+        with transaction.atomic(), self.assertRaises(IntegrityError):
+            AuditEvent.objects.create(
+                is_delete=True,
+                is_bootstrap=True,
                 **EVENT_REQ_FIELDS,
             )
 
@@ -609,3 +638,115 @@ class TestAuditingQuerySet(TestCase):
         with patch.object(models.QuerySet, "update") as super_meth:
             queryset.update(items, audit_action=AuditAction.IGNORE)
             super_meth.assert_called_with(items)
+
+
+class TestAuditEventBootstrapping(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.aerodrome_details = {
+            "KIAD": 313,
+            "VIDP": 777,
+            "FACT": 151,
+        }
+        for icao, amsl in cls.aerodrome_details.items():
+            Aerodrome.objects.create(
+                icao=icao,
+                elevation_amsl=amsl,
+                amsl_unit="ft",
+            )
+
+    def test_bootstrap_existing_model_records(self):
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
+                Aerodrome,
+                ["icao", "elevation_amsl", "amsl_unit"],
+            )
+            mock.assert_called_once_with(ANY)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def test_bootstrap_existing_model_records_batched(self):
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
+                Aerodrome,
+                ["icao", "elevation_amsl", "amsl_unit"],
+                batch_size=1,
+            )
+            self.assertEqual(created_count, mock.call_count)
+            mock.assert_called_with(ANY, batch_size=1)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def test_bootstrap_existing_model_records_with_custom_iterator(self):
+
+        def custom_iterator():
+            first = Aerodrome.objects.first()
+            yield first
+            for instance in Aerodrome.objects.exclude(icao=first.icao):
+                yield instance
+
+        mock = Mock(wraps=custom_iterator)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        created_count = AuditEvent.bootstrap_existing_model_records(
+            Aerodrome,
+            ["icao", "elevation_amsl", "amsl_unit"],
+            iter_records=mock
+        )
+        mock.assert_called_once()
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def _assert_bootstrap_records_match_setup_records(self, bootstrap_events):
+        check_details = self.aerodrome_details.copy()
+        for event in bootstrap_events:
+            self.assertEqual(event.object_class_path, "tests.models.Aerodrome")
+            self.assertFalse(event.is_create)
+            self.assertFalse(event.is_delete)
+            self.assertTrue(event.is_bootstrap)
+            icao = event.delta["icao"]["new"]
+            elevation_amsl = check_details.pop(icao)  # doesn't raise KeyError
+            self.assertEqual(
+                {
+                    "icao": {"new": icao},
+                    "elevation_amsl": {"new": elevation_amsl},
+                    "amsl_unit": {"new": "ft"},
+                },
+                event.delta,
+            )
+        self.assertEqual({}, check_details)
+
+    def test_bootstrap_existing_model_without_records(self):
+        self.assertEqual([], list(Aircraft.objects.all()))
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_events = AuditEvent.bootstrap_existing_model_records(
+                Aircraft,
+                ["tail_number"],
+            )
+            mock.assert_called_once_with(ANY)
+        self.assertEqual(0, created_events)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+
+    def test_bootstrap_existing_model_without_records_batched(self):
+        self.assertEqual([], list(Aircraft.objects.all()))
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_events = AuditEvent.bootstrap_existing_model_records(
+                Aircraft,
+                ["tail_number"],
+                batch_size=1,
+            )
+            mock.assert_not_called()
+        self.assertEqual(0, created_events)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))

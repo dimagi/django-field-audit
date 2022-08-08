@@ -1,5 +1,9 @@
 # Django Field Audit change log
 
+## v1.2.0 - 2022-08-05
+
+- Add ability to bootstrap audit events for existing model records.
+
 ## v1.1.0 - 2022-07-22
 
 - Add Django compatibility tests.
