@@ -65,7 +65,9 @@ jobs:
     - name: Check migrations
       run: |
         ./example/manage.py makemigrations field_audit
-        git add --all
+        git add ./field_audit/migrations
         git diff --cached --exit-code
+        git reset --hard HEAD  # discard changes (needed for continue-on-error)
+      continue-on-error: ${{ matrix.experimental }}
     - name: Check style
       run: flake8 --config=setup.cfg
