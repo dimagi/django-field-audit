@@ -62,5 +62,10 @@ jobs:
           }
       run: nosetests -v --with-coverage --cover-branches --cover-package=field_audit
       continue-on-error: ${{ matrix.experimental }}
+    - name: Check migrations
+      run: |
+        ./example/manage.py makemigrations field_audit
+        git add --all
+        git diff --cached --exit-code
     - name: Check style
       run: flake8 --config=setup.cfg
