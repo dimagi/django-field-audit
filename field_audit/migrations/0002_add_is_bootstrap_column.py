@@ -20,8 +20,8 @@ class Migration(migrations.Migration):
                 check=models.Q(
                     models.Q(
                         models.Q(('is_create', True), ('is_delete', True)),
-                        models.Q(('is_create', True), ('is_bootstrap', True)),
-                        models.Q(('is_delete', True), ('is_bootstrap', True)),
+                        models.Q(('is_bootstrap', True), ('is_create', True)),
+                        models.Q(('is_bootstrap', True), ('is_delete', True)),
                         _connector='OR',
                     ),
                     _negated=True,
