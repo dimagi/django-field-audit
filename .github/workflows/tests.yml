@@ -66,8 +66,8 @@ jobs:
       run: |
         ./example/manage.py makemigrations field_audit
         git add ./field_audit/migrations
+        trap 'git reset --hard HEAD' EXIT  # discard changes on exit (needed for continue-on-error)
         git diff --cached --exit-code
-        git reset --hard HEAD  # discard changes (needed for continue-on-error)
       continue-on-error: ${{ matrix.experimental }}
     - name: Check style
       run: flake8 --config=setup.cfg
