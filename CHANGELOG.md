@@ -1,5 +1,10 @@
 # Django Field Audit change log
 
+## v1.2.1 - 2022-08-12
+
+- Fix migration constraint condition ordering which caused Django<4.0 to think
+  a new migration was needed.
+
 ## v1.2.0 - 2022-08-05
 
 - Add ability to bootstrap audit events for existing model records.
