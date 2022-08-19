@@ -25,6 +25,8 @@ from .models import (
     Flight,
     SimpleModel,
     ModelWithAuditingManager,
+    PkAuto,
+    PkJson,
 )
 
 
@@ -123,6 +125,8 @@ class TestFieldAudit(TestCase):
                 Flight,
                 SimpleModel,
                 ModelWithAuditingManager,
+                PkAuto,
+                PkJson,
             },
             set(get_audited_models()),
         )

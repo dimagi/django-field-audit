@@ -42,6 +42,51 @@ def check_engine_sqlite(engine=None):
 class AuditEventManager(models.Manager):
     """Manager for the AuditEvent model."""
 
+    def by_model(self, model_class):
+        """Filter records for a specific model.
+
+        :param model_class: an audited Django model class
+        :returns: ``QuerySet``
+        """
+        from .field_audit import get_audited_class_path
+        return self.filter(
+            object_class_path=get_audited_class_path(model_class)
+        )
+
+    def cast_object_pk_for_model(self, model_class):
+        """Filter records for a specific model and add an ``as_pk_type``
+        expression column containing the ``object_pk`` values cast to the PK
+        type of ``model_class``.
+
+        :param model_class: an audited Django model class
+        :returns: ``QuerySet``
+        """
+        if type(model_class._meta.pk) is models.JSONField:
+            expression = models.F("object_pk")
+        else:
+            expression = CastFromJson("object_pk", model_class._meta.pk)
+        return self.by_model(model_class).annotate(as_pk_type=expression)
+
+    def cast_object_pks_list(self, model_class):
+        """Convenience method for getting the results of
+        ``cast_object_pk_for_model(...)`` as a values list.
+
+        Example:
+        >>> SomeModel.objects.filter(pk_in=(
+            AuditEvent.objects
+            .filter(event_date__gte=datetime.date.today())
+            .cast_object_pks_list(SomeModel)
+        ))
+
+        :param model_class: an audited Django model class
+        :param flat: optional argument passed to the
+            ``values_list()`` method (default=True).
+        """
+        return (
+            self.cast_object_pk_for_model(model_class)
+            .values_list("as_pk_type", flat=True)
+        )
+
     def by_type_and_username(self, user_type, username):
         """Use the ``contains`` query (PostgreSQL and MySQL/MariaDB only) to
         query for documents with matching keys.
@@ -78,6 +123,28 @@ class AuditEventManager(models.Manager):
             # "no cover" note: tests only run on postgres _or_ sqlite, never
             # both
             return self._by_type_and_username(user_type, username)  # pragma: no cover  # noqa: E501
+
+
+class CastFromJson(models.functions.comparison.Cast):
+
+    def __init__(self, expression, output_field):
+        super().__init__(JsonPreCast(expression), output_field)
+
+
+class JsonPreCast(models.expressions.Func):
+    """A function that works on the JSON type and prepares it such that it can
+    be cast to other types."""
+
+    template = "%(expressions)s"
+    arity = 1
+
+    def as_postgresql(self, compiler, connection, **extra_context):
+        sql, params = self.as_sql(compiler, connection, **extra_context)
+        return f"({sql} #>> '{{}}')", params
+
+    def as_sqlite(self, compiler, connection, **extra_context):
+        sql, params = self.as_sql(compiler, connection, **extra_context)
+        return f"JSON_EXTRACT({sql}, '$')", params
 
 
 class DefaultAuditEventManager(AuditEventManager):
