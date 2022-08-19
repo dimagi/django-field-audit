@@ -412,6 +412,33 @@ class AuditEvent(models.Model):
             cls.objects.bulk_create(batch, batch_size=batch_size)
         return total
 
+    @classmethod
+    def bootstrap_top_up(cls, model_class, field_names, batch_size=None):
+        """Creates audit events for existing records of ``model_class`` which
+        were created prior to auditing being enabled and are lacking a bootstrap
+        or create AuditEvent record.
+
+        :param model_class: see ``bootstrap_existing_model_records``
+        :param field_names: see ``bootstrap_existing_model_records``
+        :param batch_size:  see ``bootstrap_existing_model_records``
+        :returns: number of bootstrap records created
+        """
+        subquery = (
+            cls.objects
+            .cast_object_pks_list(model_class)
+            .filter(
+                models.Q(models.Q(is_bootstrap=True) | models.Q(is_create=True))
+            )
+        )
+        # bootstrap the model records who do not match the subquery
+        model_manager = model_class._default_manager
+        return cls.bootstrap_existing_model_records(
+            model_class,
+            field_names,
+            batch_size=batch_size,
+            iter_records=model_manager.exclude(pk__in=subquery).iterator,
+        )
+
     def __repr__(self):  # pragma: no cover
         cls_name = type(self).__name__
         return f"<{cls_name} ({self.id}, {self.object_class_path!r})>"

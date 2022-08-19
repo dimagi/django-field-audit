@@ -899,3 +899,69 @@ class TestAuditEventBootstrapping(TestCase):
             mock.assert_not_called()
         self.assertEqual(0, created_events)
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+
+
+class TestAuditEventBootstrapTopUp(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """Setup a "partially bootstrapped" scenario and verify the correct
+        model records get "topped up".
+
+        Test DB state:
+        - Three model records, (pks=[0, 1, 2])
+        - Two audit event records:
+            - one bootstrap record (pk=0)
+            - one create record (pk=2)
+
+        Expected "top up" bootstrap behavior:
+        - Create one bootstrap record (pk==1)
+        """
+        super().setUpClass()
+        # create the first model record
+        cls.items = [PkAuto.objects.create(id=0)]
+        # clear the "create" audit event to simulate a "pre-auditing" scenario
+        AuditEvent.objects.all().delete()
+        # bootstrap the model to create a single bootstrap record
+        AuditEvent.bootstrap_existing_model_records(PkAuto, ["id"])
+        # create the remaining model records
+        cls.items.extend([
+            PkAuto.objects.create(id=1),
+            PkAuto.objects.create(id=2)
+        ])
+        # delete the "create" audit event for the "middle" record to simulate
+        # it being created after the bootstrap but before webworker bounce
+        AuditEvent.objects.filter(object_pk=1).delete()
+        cls.pre_top_up = list(AuditEvent.objects.all().order_by("object_pk"))
+        cls.init_bootsp, cls.init_create = cls.pre_top_up
+        # top 'em up!
+        cls.top_up_count = AuditEvent.bootstrap_top_up(PkAuto, ["id"])
+
+    def test_all_setup_model_records_exist(self):
+        self.assertEqual(self.items, list(PkAuto.objects.all().order_by("id")))
+
+    def test_initial_bootstrap_audit_event_is_correct(self):
+        self.assertEqual(0, self.init_bootsp.object_pk)
+        self.assertTrue(self.init_bootsp.is_bootstrap)
+
+    def test_initial_create_audit_event_is_correct(self):
+        self.assertEqual(2, self.init_create.object_pk)
+        self.assertTrue(self.init_create.is_create)
+
+    def test_bootstrap_top_up_count(self):
+        self.assertEqual(1, self.top_up_count)
+
+    def test_bootstrap_top_up_event(self):
+        pre_top_up_event_ids = [event.id for event in self.pre_top_up]
+        top_up, = list(AuditEvent.objects.exclude(id__in=pre_top_up_event_ids))
+        self.assertEqual(1, top_up.object_pk)
+        self.assertTrue(top_up.is_bootstrap)
+
+    def test_all_model_records_have_bootstrap_or_create_audit_events(self):
+        self.assertEqual(
+            self.items,
+            list(PkAuto.objects.order_by("id").filter(pk__in=(
+                AuditEvent.objects.cast_object_pks_list(PkAuto)
+                .filter(models.Q(is_bootstrap=True) | models.Q(is_create=True))
+            ))),
+        )
