@@ -159,6 +159,27 @@ class Migration(migrations.Migration):
     ]
 ```
 
+##### Bootstrap events via management command
+
+If bootstrapping is not suitable during migrations, there is a management command for
+performing the same operation.  The management command does not accept arbitrary
+field names for bootstrap records, and uses the fields configured by the
+existing `audit_fields(...)` decorator on the model. Example (analogous to
+migration action shown above):
+
+```sh
+manage.py bootstrap init Aircraft --commit
+```
+
+Additionally, if a post-migration bootstrap "top up" action is needed, the
+the management command can also perform this action. A "top up" operation
+creates bootstrap audit events for any existing model records which do not have
+a "create" or "bootstrap" `AuditEvent` record. Note that the management command
+is currently the only way to "top up" bootstrap audit events. Example:
+
+```sh
+manage.py bootstrap top-up Aircraft --commit
+```
 
 ### Using with SQLite
 
