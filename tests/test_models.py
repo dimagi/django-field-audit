@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from unittest.mock import ANY, Mock, patch
 
+import django
 from django.conf import settings
 from django.db import connection, models, transaction
 from django.db.utils import IntegrityError
@@ -153,12 +154,21 @@ class TestCastFromJson(TestCase):
     field = models.TextField()
 
     def test_as_postgresql(self):
-        self.assertMultiLineEqual(
-            (
+        if django.VERSION[0] < 4:
+            expected = (
+                'SELECT "tests_pkjson"."id", '
+                'CAST(("tests_pkjson"."id" #>> \'{}\') AS text) '
+                'AS "alias" FROM "tests_pkjson"'
+            )
+        else:
+            expected = (
                 'SELECT "tests_pkjson"."id", '
                 '(("tests_pkjson"."id" #>> \'{}\'))::text '
                 'AS "alias" FROM "tests_pkjson"'
-            ),
+            )
+
+        self.assertMultiLineEqual(
+            expected,
             sqlize(PkJson, CastFromJson("id", self.field), "postgresql"),
         )
 
