@@ -295,8 +295,8 @@ class AuditEvent(models.Model):
         """Convenience method that calls ``make_audit_event()`` and saves the
         event (if one is returned).
 
-        All args/kw passed directly to ``make_audit_event()``, see that method
-        for usage.
+        All [keyword] arguments are passed directly to ``make_audit_event()``,
+        see that method for usage.
         """
         event = cls.make_audit_event(*args, **kw)
         if event is not None:
@@ -353,7 +353,7 @@ class AuditEvent(models.Model):
             return cls(
                 object_class_path=get_audited_class_path(type(instance)),
                 object_pk=object_pk,
-                change_context={} if change_context is None else change_context,
+                change_context=cls._change_context_db_value(change_context),
                 is_create=is_create,
                 is_delete=is_delete,
                 delta=delta,
@@ -395,7 +395,9 @@ class AuditEvent(models.Model):
                     delta=delta,
                 )
 
-        change_context = audit_dispatcher.dispatch(None)
+        change_context = cls._change_context_db_value(
+            audit_dispatcher.dispatch(None)
+        )
         object_class_path = get_audited_class_path(model_class)
 
         if batch_size is None:
@@ -438,6 +440,10 @@ class AuditEvent(models.Model):
             batch_size=batch_size,
             iter_records=model_manager.exclude(pk__in=subquery).iterator,
         )
+
+    @classmethod
+    def _change_context_db_value(cls, value):
+        return {} if value is None else value
 
     def __repr__(self):  # pragma: no cover
         cls_name = type(self).__name__

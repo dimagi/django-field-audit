@@ -686,6 +686,13 @@ class TestAuditEvent(TestCase):
             ))
         self.assertAuditTablesEmpty()
 
+    def test__change_context_db_value_returns_empty_dict_for_none(self):
+        self.assertEqual({}, AuditEvent._change_context_db_value(None))
+
+    def test__change_context_db_value_is_passthrough_for_not_none(self):
+        value = object()
+        self.assertIs(value, AuditEvent._change_context_db_value(value))
+
     def assertAuditTablesEmpty(self):
         # verify that the audit-related test tables are empty
         self.assertEqual([], list(AuditEvent.objects.all()))
