@@ -128,7 +128,3 @@ Command.setup_models()
 
 class DoNotCommit(Exception):
     pass
-
-
-class InvalidFieldsError(Exception):
-    pass

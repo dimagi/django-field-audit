@@ -167,7 +167,7 @@ class TestCastFromJson(TestCase):
                 'AS "alias" FROM "tests_pkjson"'
             )
 
-        self.assertMultiLineEqual(
+        self.assertEqual(
             expected,
             sqlize(PkJson, CastFromJson("id", self.field), "postgresql"),
         )
@@ -186,7 +186,7 @@ class TestCastFromJson(TestCase):
 class TestJsonPreCast(TestCase):
 
     def test_as_postgresql(self):
-        self.assertMultiLineEqual(
+        self.assertEqual(
             (
                 'SELECT "tests_pkjson"."id", '
                 '("tests_pkjson"."id" #>> \'{}\') '
