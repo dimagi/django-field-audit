@@ -42,6 +42,51 @@ def check_engine_sqlite(engine=None):
 class AuditEventManager(models.Manager):
     """Manager for the AuditEvent model."""
 
+    def by_model(self, model_class):
+        """Filter records for a specific model.
+
+        :param model_class: an audited Django model class
+        :returns: ``QuerySet``
+        """
+        from .field_audit import get_audited_class_path
+        return self.filter(
+            object_class_path=get_audited_class_path(model_class)
+        )
+
+    def cast_object_pk_for_model(self, model_class):
+        """Filter records for a specific model and add an ``as_pk_type``
+        expression column containing the ``object_pk`` values cast to the PK
+        type of ``model_class``.
+
+        :param model_class: an audited Django model class
+        :returns: ``QuerySet``
+        """
+        if type(model_class._meta.pk) is models.JSONField:
+            expression = models.F("object_pk")
+        else:
+            expression = CastFromJson("object_pk", model_class._meta.pk)
+        return self.by_model(model_class).annotate(as_pk_type=expression)
+
+    def cast_object_pks_list(self, model_class):
+        """Convenience method for getting the results of
+        ``cast_object_pk_for_model(...)`` as a values list.
+
+        Example:
+        >>> SomeModel.objects.filter(pk_in=(
+            AuditEvent.objects
+            .filter(event_date__gte=datetime.date.today())
+            .cast_object_pks_list(SomeModel)
+        ))
+
+        :param model_class: an audited Django model class
+        :param flat: optional argument passed to the
+            ``values_list()`` method (default=True).
+        """
+        return (
+            self.cast_object_pk_for_model(model_class)
+            .values_list("as_pk_type", flat=True)
+        )
+
     def by_type_and_username(self, user_type, username):
         """Use the ``contains`` query (PostgreSQL and MySQL/MariaDB only) to
         query for documents with matching keys.
@@ -78,6 +123,28 @@ class AuditEventManager(models.Manager):
             # "no cover" note: tests only run on postgres _or_ sqlite, never
             # both
             return self._by_type_and_username(user_type, username)  # pragma: no cover  # noqa: E501
+
+
+class CastFromJson(models.functions.comparison.Cast):
+
+    def __init__(self, expression, output_field):
+        super().__init__(JsonPreCast(expression), output_field)
+
+
+class JsonPreCast(models.expressions.Func):
+    """A function that works on the JSON type and prepares it such that it can
+    be cast to other types."""
+
+    template = "%(expressions)s"
+    arity = 1
+
+    def as_postgresql(self, compiler, connection, **extra_context):
+        sql, params = self.as_sql(compiler, connection, **extra_context)
+        return f"({sql} #>> '{{}}')", params
+
+    def as_sqlite(self, compiler, connection, **extra_context):
+        sql, params = self.as_sql(compiler, connection, **extra_context)
+        return f"JSON_EXTRACT({sql}, '$')", params
 
 
 class DefaultAuditEventManager(AuditEventManager):
@@ -228,8 +295,8 @@ class AuditEvent(models.Model):
         """Convenience method that calls ``make_audit_event()`` and saves the
         event (if one is returned).
 
-        All args/kw passed directly to ``make_audit_event()``, see that method
-        for usage.
+        All [keyword] arguments are passed directly to ``make_audit_event()``,
+        see that method for usage.
         """
         event = cls.make_audit_event(*args, **kw)
         if event is not None:
@@ -286,7 +353,7 @@ class AuditEvent(models.Model):
             return cls(
                 object_class_path=get_audited_class_path(type(instance)),
                 object_pk=object_pk,
-                change_context={} if change_context is None else change_context,
+                change_context=cls._change_context_db_value(change_context),
                 is_create=is_create,
                 is_delete=is_delete,
                 delta=delta,
@@ -328,7 +395,9 @@ class AuditEvent(models.Model):
                     delta=delta,
                 )
 
-        change_context = audit_dispatcher.dispatch(None)
+        change_context = cls._change_context_db_value(
+            audit_dispatcher.dispatch(None)
+        )
         object_class_path = get_audited_class_path(model_class)
 
         if batch_size is None:
@@ -344,6 +413,37 @@ class AuditEvent(models.Model):
             total += len(batch)
             cls.objects.bulk_create(batch, batch_size=batch_size)
         return total
+
+    @classmethod
+    def bootstrap_top_up(cls, model_class, field_names, batch_size=None):
+        """Creates audit events for existing records of ``model_class`` which
+        were created prior to auditing being enabled and are lacking a bootstrap
+        or create AuditEvent record.
+
+        :param model_class: see ``bootstrap_existing_model_records``
+        :param field_names: see ``bootstrap_existing_model_records``
+        :param batch_size:  see ``bootstrap_existing_model_records``
+        :returns: number of bootstrap records created
+        """
+        subquery = (
+            cls.objects
+            .cast_object_pks_list(model_class)
+            .filter(
+                models.Q(models.Q(is_bootstrap=True) | models.Q(is_create=True))
+            )
+        )
+        # bootstrap the model records who do not match the subquery
+        model_manager = model_class._default_manager
+        return cls.bootstrap_existing_model_records(
+            model_class,
+            field_names,
+            batch_size=batch_size,
+            iter_records=model_manager.exclude(pk__in=subquery).iterator,
+        )
+
+    @classmethod
+    def _change_context_db_value(cls, value):
+        return {} if value is None else value
 
     def __repr__(self):  # pragma: no cover
         cls_name = type(self).__name__

@@ -9,6 +9,7 @@ from django.db.models import (
     DecimalField,
     ForeignKey,
     IntegerField,
+    JSONField,
 )
 
 from field_audit import audit_fields
@@ -86,3 +87,13 @@ class Flight(Model):
     departed = DateTimeField(null=True)
     arrived = DateTimeField(null=True)
     diverted = BooleanField(default=False)
+
+
+@audit_fields("id")
+class PkAuto(Model):
+    id = AutoField(primary_key=True)
+
+
+@audit_fields("id")
+class PkJson(Model):
+    id = JSONField(primary_key=True)

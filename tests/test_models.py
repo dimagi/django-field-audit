@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from unittest.mock import ANY, Mock, patch
 
+import django
 from django.conf import settings
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.utils import IntegrityError
 from django.test import TestCase, override_settings
 
@@ -17,7 +18,9 @@ from field_audit.models import (
     AuditAction,
     AuditEvent,
     AuditingQuerySet,
+    CastFromJson,
     InvalidAuditActionError,
+    JsonPreCast,
     UnsetAuditActionError,
     get_date,
     get_manager,
@@ -30,6 +33,8 @@ from .models import (
     CrewMember,
     Flight,
     ModelWithAuditingManager,
+    PkAuto,
+    PkJson,
 )
 from .test_field_audit import override_audited_models
 
@@ -38,19 +43,173 @@ EVENT_REQ_FIELDS = {"object_pk": 0, "change_context": {}, "delta": {}}
 
 class TestAuditEventManager(TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.change_context = {"user_type": "User", "username": "test"}
-        fields = EVENT_REQ_FIELDS.copy()
-        fields["change_context"] = cls.change_context
-        cls.events = [AuditEvent.objects.create(**fields)]
-
     def test_by_type_and_username(self):
+        fields = EVENT_REQ_FIELDS.copy()
+        event1 = AuditEvent.objects.create(**fields)
+        fields["change_context"] = {"user_type": "User", "username": "test"}
+        event2 = AuditEvent.objects.create(**fields)
+        self.assertEqual({event1, event2}, set(AuditEvent.objects.all()))
         self.assertEqual(
-            self.events,
+            [event2],
             list(AuditEvent.objects.by_type_and_username("User", "test")),
         )
+
+    def test_by_model(self):
+        self.assertAuditTablesEmpty()
+        # the models used here are not important, just need two that are audited
+        item0 = PkAuto.objects.create()
+        item1 = PkJson.objects.create(id=1)
+        self.assertEqual(
+            set(it.id for it in [item0, item1]),
+            set(AuditEvent.objects.values_list("object_pk", flat=True)),
+        )
+        queryset = AuditEvent.objects.by_model(PkAuto)
+        self.assertEqual(
+            [item0.id],
+            list(queryset.values_list("object_pk", flat=True)),
+        )
+
+    def test_cast_object_pk_for_model(self):
+        self.assertAuditTablesEmpty()
+        items = []
+        # add two records to the model table
+        for value in range(2):
+            items.append(PkJson.objects.create(id={"key": value}))
+        # delete the audit record for the second model to verify the subquery
+        # filters correctly
+        AuditEvent.objects.filter(object_pk=items[1].pk).delete()
+        # verify the model table has two records
+        self.assertEqual(items, list(PkJson.objects.all().order_by("id")))
+        # verify using the queryset as a subquery works and only matches one
+        # model record
+        queryset = (
+            AuditEvent.objects
+            .cast_object_pk_for_model(PkJson)
+            .values_list("as_pk_type", flat=True)
+        )
+        self.assertEqual(
+            [items[0]],
+            list(PkJson.objects.filter(pk__in=queryset)),
+        )
+
+    def test_cast_object_pk_for_model_casts_to_non_json_type(self):
+        self.assertAuditTablesEmpty()
+        items = []
+        # add two records to the model table
+        for value in range(2):
+            items.append(PkAuto.objects.create())
+        # delete the audit record for the second model to verify the subquery
+        # filters correctly
+        AuditEvent.objects.filter(object_pk=items[1].pk).delete()
+        # verify the model table has two records
+        self.assertEqual(items, list(PkAuto.objects.all().order_by("id")))
+        # verify using the queryset as a subquery works and only matches one
+        # model record, which in this case has a non-json PK field
+        queryset = (
+            AuditEvent.objects
+            .cast_object_pk_for_model(PkAuto)
+            .values_list("as_pk_type", flat=True)
+        )
+        self.assertEqual(
+            [items[0]],
+            list(PkAuto.objects.filter(pk__in=queryset)),
+        )
+
+    def test_cast_object_pk_for_model_adds_expression(self):
+        event_qs = AuditEvent.objects.all()
+        pkeys_qs = AuditEvent.objects.cast_object_pk_for_model(PkAuto)
+        self.assertEqual({}, event_qs.query.annotations)
+        self.assertEqual(["as_pk_type"], list(pkeys_qs.query.annotations))
+
+    def test_cast_object_pk_for_model_adds_col_expression_for_jsonfield(self):
+        pkeys_qs = AuditEvent.objects.cast_object_pk_for_model(PkJson)
+        (alias, expr), = list(pkeys_qs.query.annotations.items())
+        self.assertEqual("as_pk_type", alias)
+        self.assertIsInstance(expr, models.expressions.Col)
+
+    def test_cast_object_pk_for_model_adds_cast_expression_for_autofield(self):
+        pkeys_qs = AuditEvent.objects.cast_object_pk_for_model(PkAuto)
+        (alias, expr), = list(pkeys_qs.query.annotations.items())
+        self.assertEqual("as_pk_type", alias)
+        self.assertIsInstance(expr, models.functions.comparison.Cast)
+
+    def test_cast_object_pks_list(self):
+        self.assertAuditTablesEmpty()
+        pkeys = {0, 1}
+        # generate some audit records
+        for pkey in pkeys:
+            PkAuto.objects.create(id=pkey)
+        self.assertEqual(
+            pkeys,
+            set(AuditEvent.objects.cast_object_pks_list(PkAuto)),
+        )
+
+    def assertAuditTablesEmpty(self):
+        # verify that the audit-related test tables are empty
+        self.assertEqual([], list(AuditEvent.objects.all()))
+
+
+class TestCastFromJson(TestCase):
+
+    field = models.TextField()
+
+    def test_as_postgresql(self):
+        if django.VERSION[0] < 4:
+            expected = (
+                'SELECT "tests_pkjson"."id", '
+                'CAST(("tests_pkjson"."id" #>> \'{}\') AS text) '
+                'AS "alias" FROM "tests_pkjson"'
+            )
+        else:
+            expected = (
+                'SELECT "tests_pkjson"."id", '
+                '(("tests_pkjson"."id" #>> \'{}\'))::text '
+                'AS "alias" FROM "tests_pkjson"'
+            )
+
+        self.assertEqual(
+            expected,
+            sqlize(PkJson, CastFromJson("id", self.field), "postgresql"),
+        )
+
+    def test_as_sqlite(self):
+        self.assertEqual(
+            (
+                'SELECT "tests_pkjson"."id", '
+                'CAST(JSON_EXTRACT("tests_pkjson"."id", \'$\') AS text) '
+                'AS "alias" FROM "tests_pkjson"'
+            ),
+            sqlize(PkJson, CastFromJson("id", self.field), "sqlite"),
+        )
+
+
+class TestJsonPreCast(TestCase):
+
+    def test_as_postgresql(self):
+        self.assertEqual(
+            (
+                'SELECT "tests_pkjson"."id", '
+                '("tests_pkjson"."id" #>> \'{}\') '
+                'AS "alias" FROM "tests_pkjson"'
+            ),
+            sqlize(PkJson, JsonPreCast("id"), "postgresql"),
+        )
+
+    def test_as_sqlite(self):
+        self.assertEqual(
+            (
+                'SELECT "tests_pkjson"."id", '
+                'JSON_EXTRACT("tests_pkjson"."id", \'$\') '
+                'AS "alias" FROM "tests_pkjson"'
+            ),
+            sqlize(PkJson, JsonPreCast("id"), "sqlite"),
+        )
+
+
+def sqlize(model, expression, vendor, alias="alias"):
+    with patch.object(connection, "vendor", vendor):
+        annotate_kw = {alias: expression}
+        return str(model.objects.annotate(**annotate_kw).query)
 
 
 class TestDefaultAuditEventManager(TestCase):
@@ -537,6 +696,13 @@ class TestAuditEvent(TestCase):
             ))
         self.assertAuditTablesEmpty()
 
+    def test__change_context_db_value_returns_empty_dict_for_none(self):
+        self.assertEqual({}, AuditEvent._change_context_db_value(None))
+
+    def test__change_context_db_value_is_passthrough_for_not_none(self):
+        value = object()
+        self.assertIs(value, AuditEvent._change_context_db_value(value))
+
     def assertAuditTablesEmpty(self):
         # verify that the audit-related test tables are empty
         self.assertEqual([], list(AuditEvent.objects.all()))
@@ -750,3 +916,69 @@ class TestAuditEventBootstrapping(TestCase):
             mock.assert_not_called()
         self.assertEqual(0, created_events)
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+
+
+class TestAuditEventBootstrapTopUp(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """Setup a "partially bootstrapped" scenario and verify the correct
+        model records get "topped up".
+
+        Test DB state:
+        - Three model records, (pks=[0, 1, 2])
+        - Two audit event records:
+            - one bootstrap record (pk=0)
+            - one create record (pk=2)
+
+        Expected "top up" bootstrap behavior:
+        - Create one bootstrap record (pk==1)
+        """
+        super().setUpClass()
+        # create the first model record
+        cls.items = [PkAuto.objects.create(id=0)]
+        # clear the "create" audit event to simulate a "pre-auditing" scenario
+        AuditEvent.objects.all().delete()
+        # bootstrap the model to create a single bootstrap record
+        AuditEvent.bootstrap_existing_model_records(PkAuto, ["id"])
+        # create the remaining model records
+        cls.items.extend([
+            PkAuto.objects.create(id=1),
+            PkAuto.objects.create(id=2)
+        ])
+        # delete the "create" audit event for the "middle" record to simulate
+        # it being created after the bootstrap but before webworker bounce
+        AuditEvent.objects.filter(object_pk=1).delete()
+        cls.pre_top_up = list(AuditEvent.objects.all().order_by("object_pk"))
+        cls.init_bootsp, cls.init_create = cls.pre_top_up
+        # top 'em up!
+        cls.top_up_count = AuditEvent.bootstrap_top_up(PkAuto, ["id"])
+
+    def test_all_setup_model_records_exist(self):
+        self.assertEqual(self.items, list(PkAuto.objects.all().order_by("id")))
+
+    def test_initial_bootstrap_audit_event_is_correct(self):
+        self.assertEqual(0, self.init_bootsp.object_pk)
+        self.assertTrue(self.init_bootsp.is_bootstrap)
+
+    def test_initial_create_audit_event_is_correct(self):
+        self.assertEqual(2, self.init_create.object_pk)
+        self.assertTrue(self.init_create.is_create)
+
+    def test_bootstrap_top_up_count(self):
+        self.assertEqual(1, self.top_up_count)
+
+    def test_bootstrap_top_up_event(self):
+        pre_top_up_event_ids = [event.id for event in self.pre_top_up]
+        top_up, = list(AuditEvent.objects.exclude(id__in=pre_top_up_event_ids))
+        self.assertEqual(1, top_up.object_pk)
+        self.assertTrue(top_up.is_bootstrap)
+
+    def test_all_model_records_have_bootstrap_or_create_audit_events(self):
+        self.assertEqual(
+            self.items,
+            list(PkAuto.objects.order_by("id").filter(pk__in=(
+                AuditEvent.objects.cast_object_pks_list(PkAuto)
+                .filter(models.Q(is_bootstrap=True) | models.Q(is_create=True))
+            ))),
+        )
