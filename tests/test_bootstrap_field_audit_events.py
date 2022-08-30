@@ -24,6 +24,8 @@ def restore_command_models(command_class):
 
 class TestCommand(TestCase):
 
+    command = "bootstrap_field_audit_events"
+
     def setUp(self):
         super().setUp()
 
@@ -86,10 +88,10 @@ class TestCommand(TestCase):
             patch.object(PkAuto, AuditEvent.ATTACH_FIELD_NAMES_AT, []),
             self.assertRaises(CommandError),
         ):
-            call_command("bootstrap", "init", "PkAuto", stdout=self.quiet)
+            call_command(self.command, "init", "PkAuto", stdout=self.quiet)
 
     def test_bootstrap_init_creates_audit_events_for_all_model_records(self):
-        call_command("bootstrap", "init", "PkAuto", stdout=self.quiet)
+        call_command(self.command, "init", "PkAuto", stdout=self.quiet)
         self.assertEqual(
             set(PkAuto.objects.all().values_list("pk", flat=True)),
             set(
@@ -112,7 +114,7 @@ class TestCommand(TestCase):
         pre_top_up_event_ids = set(
             AuditEvent.objects.all().values_list("id", flat=True)
         )
-        call_command("bootstrap", "top-up", "PkAuto", stdout=self.quiet)
+        call_command(self.command, "top-up", "PkAuto", stdout=self.quiet)
         self.assertEqual(
             need_bootstrap,
             set(
