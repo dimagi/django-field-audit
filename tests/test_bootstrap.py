@@ -62,6 +62,23 @@ class TestCommand(TestCase):
                 bootstrap.Command.models,
             )
 
+    def test_setup_models_crashes_on_verbose_model_name_collision(self):
+
+        class ModelY(models.Model):
+            pass
+
+        class ModelZ(models.Model):
+            pass
+
+        ModelZ.__name__ = ModelY.__name__
+        with restore_command_models(bootstrap.Command):
+            patch_kw = {"return_value": {ModelY: "y", ModelZ: "z"}}
+            with (
+                patch.object(bootstrap, "get_audited_models", **patch_kw),
+                self.assertRaises(bootstrap.InvalidModelState),
+            ):
+                bootstrap.Command.setup_models()
+
     def test_bootstrap_crashes_early_if_model_has_invalid_fields(self):
         with (
             patch.object(PkAuto, AuditEvent.ATTACH_FIELD_NAMES_AT, []),

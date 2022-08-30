@@ -22,9 +22,16 @@ class Command(BaseCommand):
             name = model_name(model_class)
             collision = cls.models.setdefault(name, model_class)
             if collision is not model_class:
+                original = model_name(collision, unique=True)
+                namesake = model_name(model_class, unique=True)
+                if original == namesake:
+                    raise InvalidModelState(
+                        "Two audited models from the same app have the "
+                        f"same name: {(collision, model_class)}"
+                    )
                 del cls.models[name]
-                cls.models[model_name(collision, unique=True)] = collision
-                cls.models[model_name(model_class, unique=True)] = model_class
+                cls.models[original] = collision
+                cls.models[namesake] = model_class
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -127,4 +134,8 @@ Command.setup_models()
 
 
 class DoNotCommit(Exception):
+    pass
+
+
+class InvalidModelState(CommandError):
     pass
