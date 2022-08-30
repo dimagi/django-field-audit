@@ -84,29 +84,10 @@ class TestCommand(TestCase):
             patch.object(PkAuto, AuditEvent.ATTACH_FIELD_NAMES_AT, []),
             self.assertRaises(CommandError),
         ):
-            call_command(
-                "bootstrap", "init", "PkAuto", "--commit", stdout=self.quiet,
-            )
-
-    def test_bootstrap_database_writes_require_commit_option(self):
-        self.assertEqual([], list(AuditEvent.objects.all()))
-        call_command(
-            "bootstrap", "init", "PkAuto", "--commit", stdout=self.quiet,
-        )
-        self.assertEqual(
-            set(PkAuto.objects.all().values_list("pk", flat=True)),
-            set(AuditEvent.objects.all().values_list("object_pk", flat=True)),
-        )
-
-    def test_bootstrap_omitting_commit_option_writes_nothing(self):
-        self.assertEqual([], list(AuditEvent.objects.all()))
-        call_command("bootstrap", "init", "PkAuto", stdout=self.quiet)
-        self.assertEqual([], list(AuditEvent.objects.all()))
+            call_command("bootstrap", "init", "PkAuto", stdout=self.quiet)
 
     def test_bootstrap_init_creates_audit_events_for_all_model_records(self):
-        call_command(
-            "bootstrap", "init", "PkAuto", "--commit", stdout=self.quiet
-        )
+        call_command("bootstrap", "init", "PkAuto", stdout=self.quiet)
         self.assertEqual(
             set(PkAuto.objects.all().values_list("pk", flat=True)),
             set(
@@ -129,9 +110,7 @@ class TestCommand(TestCase):
         pre_top_up_event_ids = set(
             AuditEvent.objects.all().values_list("id", flat=True)
         )
-        call_command(
-            "bootstrap", "top-up", "PkAuto", "--commit", stdout=self.quiet
-        )
+        call_command("bootstrap", "top-up", "PkAuto", stdout=self.quiet)
         self.assertEqual(
             need_bootstrap,
             set(

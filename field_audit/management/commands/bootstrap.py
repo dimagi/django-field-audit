@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 
 from field_audit.field_audit import get_audited_models
 from field_audit.models import AuditEvent
@@ -45,34 +44,13 @@ class Command(BaseCommand):
             nargs="+",
             help="Model class(es) to perform the bootstrap operation on.",
         )
-        parser.add_argument(
-            "--commit",
-            action="store_true",
-            default=False,
-            help=(
-                "Create the audit event records (a dry-run is performed when "
-                "this option is omitted)."
-            ),
-        )
 
-    def handle(self, operation, models, commit, **options):
+    def handle(self, operation, models, **options):
         self.stdout.ending = None
         self.logfile = self.stdout
-        if not commit:
-            self.log_info(
-                "DRY-RUN, no events will be written to the database. Use the "
-                "--commit option to perform persistent writes."
-            )
         for name in models:
             model_class = self.models[name]
-            try:
-                with transaction.atomic():
-                    self.operations[operation](self, model_class)
-                    if not commit:
-                        # cause a transaction rollback
-                        raise DoNotCommit()
-            except DoNotCommit:
-                pass
+            self.operations[operation](self, model_class)
 
     def init_all(self, model_class):
         query = model_class._default_manager.all()
@@ -131,10 +109,6 @@ class Command(BaseCommand):
 
 
 Command.setup_models()
-
-
-class DoNotCommit(Exception):
-    pass
 
 
 class InvalidModelState(CommandError):
