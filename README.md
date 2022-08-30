@@ -168,7 +168,7 @@ existing `audit_fields(...)` decorator on the model. Example (analogous to
 migration action shown above):
 
 ```sh
-manage.py bootstrap init Aircraft
+manage.py bootstrap_field_audit_events init Aircraft
 ```
 
 Additionally, if a post-migration bootstrap "top up" action is needed, the
@@ -178,7 +178,7 @@ a "create" or "bootstrap" `AuditEvent` record. Note that the management command
 is currently the only way to "top up" bootstrap audit events. Example:
 
 ```sh
-manage.py bootstrap top-up Aircraft
+manage.py bootstrap_field_audit_events top-up Aircraft
 ```
 
 ### Using with SQLite

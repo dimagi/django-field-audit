@@ -8,7 +8,9 @@ from django.test import TestCase
 
 
 from field_audit.field_audit import get_audited_models
-from field_audit.management.commands import bootstrap
+from field_audit.management.commands import (
+    bootstrap_field_audit_events as bootstrap,
+)
 from field_audit.models import AuditEvent
 from tests.models import PkAuto
 
