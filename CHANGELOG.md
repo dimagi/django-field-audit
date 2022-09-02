@@ -1,5 +1,10 @@
 # Django Field Audit change log
 
+## v1.2.3 - 2022-09-02
+
+- Use batching by default for all bootstrap operations
+- Add a `--batch-size` option to the bootstrap management command
+
 ## v1.2.2 - 2022-08-19
 
 - Add management command for bootstrapping
