@@ -4,6 +4,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.migrations import RunPython
 from django.utils.module_loading import import_string
 
+from .const import BOOTSTRAP_BATCH_SIZE
+
 log = logging.getLogger(__name__)
 
 
@@ -52,8 +54,8 @@ def get_fqcn(cls):
     return f"{cls.__module__}.{cls.__qualname__}"
 
 
-def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
-                  reverse_func=RunPython.noop):
+def run_bootstrap(model_class, field_names, batch_size=BOOTSTRAP_BATCH_SIZE,
+                  iter_records=None, reverse_func=RunPython.noop):
     """Returns a django migration Operation which calls
     ``AuditEvent.bootstrap_existing_model_records()`` to add "migration" records
     for existing model records.
@@ -63,7 +65,8 @@ def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
     :param field_names: see
         ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
     :param batch_size: see
-        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``,
+        (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
     :param iter_records:  see
         ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
     :param reverse_func: (optional, default: ``RunPython.noop``) a callable for

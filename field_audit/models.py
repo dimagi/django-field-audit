@@ -6,6 +6,7 @@ from itertools import islice
 from django.conf import settings
 from django.db import models
 
+from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
 
 USER_TYPE_TTY = "SystemTtyOwner",
@@ -361,15 +362,19 @@ class AuditEvent(models.Model):
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
-                                         batch_size=None, iter_records=None):
+                                         batch_size=BOOTSTRAP_BATCH_SIZE,
+                                         iter_records=None):
         """Creates audit events for all existing records of ``model_class``.
+        Database records are fetched and created in batched bulk operations
+        for efficiency.
 
         :param model_class: a subclass of ``django.db.models.Model`` that uses
             the ``audit_fields()`` decorator.
         :param field_names: a collection of field names to include in the
             resulting audit event ``delta`` value.
         :param batch_size: (optional) create bootstrap records in batches of
-            ``batch_size``. If ``None`` (the default), no batching is performed.
+            ``batch_size``. Default: ``field_audit.const.BOOTSTRAP_BATCH_SIZE``.
+            Use ``None`` to disable batching.
         :param iter_records: a callable used to fetch model instances.
             If ``None`` (the default), ``.all().iterator()`` is called on the
             model's default manager.
@@ -415,7 +420,8 @@ class AuditEvent(models.Model):
         return total
 
     @classmethod
-    def bootstrap_top_up(cls, model_class, field_names, batch_size=None):
+    def bootstrap_top_up(cls, model_class, field_names,
+                         batch_size=BOOTSTRAP_BATCH_SIZE):
         """Creates audit events for existing records of ``model_class`` which
         were created prior to auditing being enabled and are lacking a bootstrap
         or create AuditEvent record.
@@ -423,6 +429,7 @@ class AuditEvent(models.Model):
         :param model_class: see ``bootstrap_existing_model_records``
         :param field_names: see ``bootstrap_existing_model_records``
         :param batch_size:  see ``bootstrap_existing_model_records``
+            (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
         :returns: number of bootstrap records created
         """
         subquery = (
