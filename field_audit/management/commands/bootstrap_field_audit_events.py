@@ -2,6 +2,7 @@ from contextlib import contextmanager
 
 from django.core.management.base import BaseCommand, CommandError
 
+from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.field_audit import get_audited_models
 from field_audit.models import AuditEvent
 
@@ -44,10 +45,25 @@ class Command(BaseCommand):
             nargs="+",
             help="Model class(es) to perform the bootstrap operation on.",
         )
+        parser.add_argument(
+            "--batch-size",
+            default=BOOTSTRAP_BATCH_SIZE,
+            metavar="N",
+            type=int,
+            help=(
+                "Perform database queries in batches of size %(metavar)s "
+                "(default=%(default)s). A value of zero (0) disables batching."
+            ),
+        )
 
-    def handle(self, operation, models, **options):
+    def handle(self, operation, models, batch_size, **options):
         self.stdout.ending = None
         self.logfile = self.stdout
+        if batch_size < 0:
+            raise CommandError("--batch-size must be a positive integer")
+        if batch_size == 0:
+            batch_size = None
+        self.batch_size = batch_size
         for name in models:
             model_class = self.models[name]
             self.operations[operation](self, model_class)
@@ -78,6 +94,7 @@ class Command(BaseCommand):
         return bootstrap_method(
             model_class,
             field_names,
+            batch_size=self.batch_size,
             **bootstrap_kw,
         )
 

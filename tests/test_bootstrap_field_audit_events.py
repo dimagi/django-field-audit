@@ -1,12 +1,12 @@
 from contextlib import contextmanager
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from django.core.management import CommandError, call_command
 from django.db import models
 from django.test import TestCase
 
-
+from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.field_audit import get_audited_models
 from field_audit.management.commands import (
     bootstrap_field_audit_events as bootstrap,
@@ -78,6 +78,27 @@ class TestCommand(TestCase):
                 self.assertRaises(bootstrap.InvalidModelState),
             ):
                 bootstrap.Command.setup_models()
+
+    def test_bootstrap_uses_default_batch_size(self):
+        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+            self.quiet_command("top-up", "PkAuto")
+            mock.assert_called_once_with(
+                PkAuto, ANY, batch_size=BOOTSTRAP_BATCH_SIZE,
+            )
+
+    def test_bootstrap_allows_custom_batch_size(self):
+        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+            self.quiet_command("top-up", "--batch-size", "1", "PkAuto")
+            mock.assert_called_once_with(PkAuto, ANY, batch_size=1)
+
+    def test_bootstrap_disables_batching_for_batch_size_zero(self):
+        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+            self.quiet_command("top-up", "--batch-size", "0", "PkAuto")
+            mock.assert_called_once_with(PkAuto, ANY, batch_size=None)
+
+    def test_bootstrap_crashes_for_negative_batch_size(self):
+        with self.assertRaises(CommandError):
+            self.quiet_command("top-up", "--batch-size", "-1", "PkAuto")
 
     def test_bootstrap_crashes_early_if_model_has_invalid_fields(self):
         with (
