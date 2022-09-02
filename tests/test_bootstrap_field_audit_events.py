@@ -28,10 +28,6 @@ class TestCommand(TestCase):
 
     def setUp(self):
         super().setUp()
-
-        # management command stdout sent here, set to None make noisy tests
-        self.quiet = StringIO()
-
         # create some records for bootstrapping
         for _ in range(2):
             PkAuto.objects.create()
@@ -88,10 +84,10 @@ class TestCommand(TestCase):
             patch.object(PkAuto, AuditEvent.ATTACH_FIELD_NAMES_AT, []),
             self.assertRaises(CommandError),
         ):
-            call_command(self.command, "init", "PkAuto", stdout=self.quiet)
+            self.quiet_command("init", "PkAuto")
 
     def test_bootstrap_init_creates_audit_events_for_all_model_records(self):
-        call_command(self.command, "init", "PkAuto", stdout=self.quiet)
+        self.quiet_command("init", "PkAuto")
         self.assertEqual(
             set(PkAuto.objects.all().values_list("pk", flat=True)),
             set(
@@ -114,7 +110,7 @@ class TestCommand(TestCase):
         pre_top_up_event_ids = set(
             AuditEvent.objects.all().values_list("id", flat=True)
         )
-        call_command(self.command, "top-up", "PkAuto", stdout=self.quiet)
+        self.quiet_command("top-up", "PkAuto")
         self.assertEqual(
             need_bootstrap,
             set(
@@ -122,3 +118,6 @@ class TestCommand(TestCase):
                 .values_list("object_pk", flat=True)
             ),
         )
+
+    def quiet_command(self, *args, **kw):
+        return call_command(self.command, *args, stdout=StringIO(), **kw)
