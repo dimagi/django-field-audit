@@ -22,9 +22,7 @@ def get_lib_version(filepath):
 def get_latest_changelog_version(filepath):
     expected_msg = "(expected format: '## vN.N.N - <date>')"
     with open(filepath, "r") as file:
-        line_num = 0
-        for line in file:
-            line_num += 1
+        for line_num, line in enumerate(file, start=1):
             if line.startswith("##"):
                 # the first non-H1 header must be the latest version
                 try:
