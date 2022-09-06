@@ -4,6 +4,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.migrations import RunPython
 from django.utils.module_loading import import_string
 
+from .const import BOOTSTRAP_BATCH_SIZE
+
 log = logging.getLogger(__name__)
 
 
@@ -52,8 +54,8 @@ def get_fqcn(cls):
     return f"{cls.__module__}.{cls.__qualname__}"
 
 
-def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
-                  reverse_func=RunPython.noop):
+def run_bootstrap(model_class, field_names, batch_size=BOOTSTRAP_BATCH_SIZE,
+                  iter_records=None, reverse_func=RunPython.noop):
     """Returns a django migration Operation which calls
     ``AuditEvent.bootstrap_existing_model_records()`` to add "migration" records
     for existing model records.
@@ -63,14 +65,15 @@ def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
     :param field_names: see
         ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
     :param batch_size: see
-        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
+        ``field_audit.models.AuditEvent.bootstrap_existing_model_records``,
+        (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
     :param iter_records:  see
         ``field_audit.models.AuditEvent.bootstrap_existing_model_records``
     :param reverse_func: (optional, default: ``RunPython.noop``) a callable for
         unapplying the migration. Passed directly to the returned
         ``RunPython()`` instance as the ``reverse_code`` argument.
     """
-    def wrapper(*args, **kwargs):
+    def do_bootstrap(*args, **kwargs):
         from .models import AuditEvent
         count = AuditEvent.bootstrap_existing_model_records(
             model_class,
@@ -78,5 +81,8 @@ def run_bootstrap(model_class, field_names, batch_size=None, iter_records=None,
             batch_size,
             iter_records,
         )
-        log.info(f"boostrapped {count} audit event(s) for model: {model_class}")
-    return RunPython(wrapper, reverse_code=reverse_func)
+        log.info(
+            f"bootstrapped {count} audit event{'' if count == 1 else 's'} for: "
+            f"{model_class._meta.app_label}.{model_class._meta.object_name}"
+        )
+    return RunPython(do_bootstrap, reverse_code=reverse_func)

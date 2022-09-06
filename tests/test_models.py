@@ -10,6 +10,7 @@ from django.db.utils import IntegrityError
 from django.test import TestCase, override_settings
 
 from field_audit.auditors import audit_dispatcher
+from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.models import (
     USER_TYPE_PROCESS,
     USER_TYPE_REQUEST,
@@ -831,12 +832,26 @@ class TestAuditEventBootstrapping(TestCase):
                 Aerodrome,
                 ["icao", "elevation_amsl", "amsl_unit"],
             )
+            mock.assert_called_once_with(ANY, batch_size=BOOTSTRAP_BATCH_SIZE)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        self._assert_bootstrap_records_match_setup_records(bootstrap_events)
+
+    def test_bootstrap_existing_model_records_without_batching(self):
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
+                Aerodrome,
+                ["icao", "elevation_amsl", "amsl_unit"],
+                batch_size=None,
+            )
             mock.assert_called_once_with(ANY)
         bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
         self.assertEqual(len(bootstrap_events), created_count)
         self._assert_bootstrap_records_match_setup_records(bootstrap_events)
 
-    def test_bootstrap_existing_model_records_batched(self):
+    def test_bootstrap_existing_model_records_with_alternate_batch_size(self):
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
         with patch.object(AuditEvent.objects, "bulk_create",
                           side_effect=AuditEvent.objects.bulk_create) as mock:
@@ -899,11 +914,11 @@ class TestAuditEventBootstrapping(TestCase):
                 Aircraft,
                 ["tail_number"],
             )
-            mock.assert_called_once_with(ANY)
+            mock.assert_not_called()
         self.assertEqual(0, created_events)
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
 
-    def test_bootstrap_existing_model_without_records_batched(self):
+    def test_bootstrap_existing_model_without_records_and_no_batching(self):
         self.assertEqual([], list(Aircraft.objects.all()))
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
         with patch.object(AuditEvent.objects, "bulk_create",
@@ -911,9 +926,9 @@ class TestAuditEventBootstrapping(TestCase):
             created_events = AuditEvent.bootstrap_existing_model_records(
                 Aircraft,
                 ["tail_number"],
-                batch_size=1,
+                batch_size=None,
             )
-            mock.assert_not_called()
+            mock.assert_called_once_with(ANY)
         self.assertEqual(0, created_events)
         self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
 

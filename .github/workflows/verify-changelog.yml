@@ -1,0 +1,14 @@
+name: verify-changelog
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Verify changelog version
+      run: ./scripts/verify-changelog-version.py

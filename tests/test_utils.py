@@ -4,6 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.migrations.operations import RunPython
 from django.test import SimpleTestCase
 
+from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.utils import (
     class_import_helper,
     get_fqcn,
@@ -71,11 +72,12 @@ class TestRunBootstrapExistingModel(SimpleTestCase):
     def test_run_bootstrap(self):
         def reverse():
             return None
-        bootstrap_args = (Flight, ["field"], None, None)
-        migration_op = run_bootstrap(*bootstrap_args, reverse_func=reverse)
+        run_bs_args = (Flight, ["field"])
+        run_bs_def_args = (BOOTSTRAP_BATCH_SIZE, None)
+        migration_op = run_bootstrap(*run_bs_args, reverse_func=reverse)
         self.assertIsInstance(migration_op, RunPython)
         self.assertIs(reverse, migration_op.reverse_code)
         path = "field_audit.models.AuditEvent.bootstrap_existing_model_records"
         with patch(path) as do_bootstrap:
             migration_op.code()
-            do_bootstrap.assert_called_once_with(*bootstrap_args)
+            do_bootstrap.assert_called_once_with(*run_bs_args, *run_bs_def_args)
