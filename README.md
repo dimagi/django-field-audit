@@ -250,7 +250,6 @@ twine upload dist/*
 - Implement auditing for the remaining "special" QuerySet write operations:
   - `bulk_create()`
   - `bulk_update()`
-  - `update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
 
