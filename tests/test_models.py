@@ -845,6 +845,16 @@ class TestAuditingQuerySet(TestCase):
             queryset.update(**items, audit_action=AuditAction.IGNORE)
             super_meth.assert_called_with(**items)
 
+    def test_update_audit_action_raise_raises_exception(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(UnsetAuditActionError):
+            queryset.update(value='updated', audit_action=AuditAction.RAISE)
+
+    def test_update_audit_action_default_raises_exception(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(UnsetAuditActionError):
+            queryset.update(value='updated')
+
 
 class TestAuditEventBootstrapping(TestCase):
 
