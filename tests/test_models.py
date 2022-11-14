@@ -838,12 +838,17 @@ class TestAuditingQuerySet(TestCase):
             0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False).count()
         )
 
-    def test_update_audit_action_ignore_calls_super(self):
-        queryset = AuditingQuerySet()
-        items = {'value': 'new_value'}
-        with patch.object(models.QuerySet, "update") as super_meth:
-            queryset.update(**items, audit_action=AuditAction.IGNORE)
-            super_meth.assert_called_with(**items)
+    def test_update_audit_action_ignore_does_not_create_audit_events(self):
+        ModelWithAuditingManager.objects.create(id=0, value="number")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        queryset.update(value='updated', audit_action=AuditAction.IGNORE)
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(instance.value, 'updated')
+        self.assertEqual(
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False).count()
+        )
 
     def test_update_audit_action_raise_raises_exception(self):
         queryset = AuditingQuerySet()
