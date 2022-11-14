@@ -804,7 +804,8 @@ class TestAuditingQuerySet(TestCase):
         instances = ModelWithAuditingManager.objects.all()
         for instance in instances:
             self.assertEqual("updated", instance.value)
-            event, = AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False)
+            event, = AuditEvent.objects.filter(object_pk=instance.pk,
+                                               is_create=False, is_delete=False)
             self.assertEqual(
                 "tests.models.ModelWithAuditingManager",
                 event.object_class_path,
@@ -814,7 +815,7 @@ class TestAuditingQuerySet(TestCase):
                 event.delta,
             )
 
-    def test_update_audit_action_audit_does_not_create_audit_events_if_audited_field_stays_the_same(self):
+    def test_update_audit_action_audit_does_not_create_audit_events_if_audited_field_stays_the_same(self):  # noqa: E501
         ModelWithAuditingManager.objects.create(id=0, value="initial")
 
         queryset = ModelWithAuditingManager.objects.all()
@@ -822,20 +823,24 @@ class TestAuditingQuerySet(TestCase):
 
         instance, = ModelWithAuditingManager.objects.all()
         self.assertEqual(
-            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,is_delete=False).count()
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
         )
 
-    def test_update_audit_action_audit_does_not_create_audit_events_if_no_audited_field_updated(self):
+    def test_update_audit_action_audit_does_not_create_audit_events_if_no_audited_field_updated(self):  # noqa: E501
         ModelWithAuditingManager.objects.create(id=0, value="initial")
 
         queryset = ModelWithAuditingManager.objects.all()
-        queryset.update(non_audited_field='updated', audit_action=AuditAction.AUDIT)
+        queryset.update(
+            non_audited_field='updated', audit_action=AuditAction.AUDIT
+        )
 
         instance, = ModelWithAuditingManager.objects.all()
         self.assertEqual(instance.value, 'initial')
         self.assertEqual(instance.non_audited_field, 'updated')
         self.assertEqual(
-            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False).count()
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
         )
 
     def test_update_audit_action_ignore_does_not_create_audit_events(self):
@@ -847,7 +852,8 @@ class TestAuditingQuerySet(TestCase):
         instance, = ModelWithAuditingManager.objects.all()
         self.assertEqual(instance.value, 'updated')
         self.assertEqual(
-            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False).count()
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
         )
 
     def test_update_audit_action_raise_raises_exception(self):

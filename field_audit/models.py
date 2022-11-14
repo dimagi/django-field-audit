@@ -334,7 +334,8 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
-        fields_to_audit = init_values.keys() if init_values else cls._field_names(instance)
+        fields_to_audit = init_values.keys() if init_values else \
+            cls._field_names(instance)
         init_values = init_values or cls.reset_initial_values(instance)
         delta = {}
         for field_name in fields_to_audit:
@@ -580,7 +581,9 @@ class AuditingQuerySet(models.QuerySet):
         request = request.get()
 
         fields_to_update = set(kw.keys())
-        audited_fields = set(getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT))
+        audited_fields = set(
+            getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT)
+        )
         fields_to_audit = fields_to_update & audited_fields
         if not fields_to_audit:
             # no audited fields are changing
@@ -598,7 +601,9 @@ class AuditingQuerySet(models.QuerySet):
         audit_events = []
         for instance in self:
             init_values = old_values[instance.pk]
-            audit_event = AuditEvent.make_audit_event(instance, False, False, request, init_values=init_values)
+            audit_event = AuditEvent.make_audit_event(
+                instance, False, False, request, init_values=init_values
+            )
             if audit_event:
                 audit_events.append(audit_event)
         if audit_events:
