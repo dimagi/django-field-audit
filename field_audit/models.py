@@ -305,7 +305,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def make_audit_event(cls, instance, is_create, is_delete,
-                         request, object_pk=None):
+                         request, object_pk=None, init_values=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -320,6 +320,9 @@ class AuditEvent(models.Model):
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
+        :param init_values: (Optional) dictionary of initial values for audited
+            fields on the provided instance. If not provided, will use
+            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
@@ -331,7 +334,7 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
-        init_values = cls.reset_initial_values(instance)
+        init_values = init_values or cls.reset_initial_values(instance)
         delta = {}
         for field_name in cls._field_names(instance):
             value = cls.get_field_value(instance, field_name)
@@ -571,10 +574,28 @@ class AuditingQuerySet(models.QuerySet):
     def update(self, *args, audit_action=AuditAction.RAISE, **kw):
         if audit_action is AuditAction.IGNORE:
             return super().update(*args, **kw)
-        else:
-            raise NotImplementedError(
-                "Change auditing is not implemented for update()."
-            )
+        assert audit_action is AuditAction.AUDIT, audit_action
+        from .field_audit import request
+        request = request.get()
+
+        old_values = {}
+        for instance in self:
+            instance_values = {}
+            for value in getattr(instance, AuditEvent.ATTACH_FIELD_NAMES_AT):
+                instance_values.update({value: getattr(instance, value)})
+            old_values[instance.pk] = instance_values
+
+        value = super().update(**kw)
+        # create and write the audit events _after_ the update succeeds
+        audit_events = []
+        for instance in self:
+            init_values = old_values[instance.pk]
+            audit_event = AuditEvent.make_audit_event(instance, False, False, request, init_values=init_values)
+            if audit_event:
+                audit_events.append(audit_event)
+        if audit_events:
+            AuditEvent.objects.bulk_create(audit_events)
+        return value
 
 
 AuditingManager = models.Manager.from_queryset(AuditingQuerySet)
