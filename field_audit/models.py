@@ -334,9 +334,10 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
+        fields_to_audit = init_values.keys() if init_values else cls._field_names(instance)
         init_values = init_values or cls.reset_initial_values(instance)
         delta = {}
-        for field_name in cls._field_names(instance):
+        for field_name in fields_to_audit:
             value = cls.get_field_value(instance, field_name)
             if is_create:
                 delta[field_name] = {"new": value}
@@ -578,12 +579,19 @@ class AuditingQuerySet(models.QuerySet):
         from .field_audit import request
         request = request.get()
 
+        fields_to_update = set(kw.keys())
+        audited_fields = set(getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT))
+        fields_to_audit = fields_to_update & audited_fields
+        if not fields_to_audit:
+            # no audited fields are changing
+            return super().update(**kw)
+
+        values_to_fetch = list(fields_to_update) + ['pk']
+        fetched_values = self.values(*values_to_fetch)
         old_values = {}
-        for instance in self:
-            instance_values = {}
-            for value in getattr(instance, AuditEvent.ATTACH_FIELD_NAMES_AT):
-                instance_values.update({value: getattr(instance, value)})
-            old_values[instance.pk] = instance_values
+        for value in fetched_values:
+            pk = value.pop('pk')
+            old_values[pk] = value
 
         value = super().update(**kw)
         # create and write the audit events _after_ the update succeeds

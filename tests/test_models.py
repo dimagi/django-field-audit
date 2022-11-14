@@ -825,12 +825,25 @@ class TestAuditingQuerySet(TestCase):
             0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,is_delete=False).count()
         )
 
+    def test_update_audit_action_audit_does_not_create_audit_events_if_no_audited_field_updated(self):
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+
+        queryset = ModelWithAuditingManager.objects.all()
+        queryset.update(non_audited_field='updated', audit_action=AuditAction.AUDIT)
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(instance.value, 'initial')
+        self.assertEqual(instance.non_audited_field, 'updated')
+        self.assertEqual(
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False, is_delete=False).count()
+        )
+
     def test_update_audit_action_ignore_calls_super(self):
         queryset = AuditingQuerySet()
-        items = object()
+        items = {'value': 'new_value'}
         with patch.object(models.QuerySet, "update") as super_meth:
-            queryset.update(items, audit_action=AuditAction.IGNORE)
-            super_meth.assert_called_with(items)
+            queryset.update(**items, audit_action=AuditAction.IGNORE)
+            super_meth.assert_called_with(**items)
 
 
 class TestAuditEventBootstrapping(TestCase):
