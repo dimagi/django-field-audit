@@ -4,7 +4,7 @@ from functools import wraps
 from itertools import islice
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 
 from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
@@ -587,27 +587,30 @@ class AuditingQuerySet(models.QuerySet):
             # no audited fields are changing
             return super().update(**kw)
 
-        values_to_fetch = fields_to_update | {"pk"}
-        old_values = {}
-        for value in self.values(*values_to_fetch):
-            pk = value.pop('pk')
-            old_values[pk] = value
+        # since we fetch objects from this queryset, save old values, update,
+        # and then fetch the objects again, we need to lock until this is done
+        with transaction.atomic():
+            values_to_fetch = fields_to_update | {"pk"}
+            old_values = {}
+            for value in self.values(*values_to_fetch):
+                pk = value.pop('pk')
+                old_values[pk] = value
 
-        value = super().update(**kw)
-        # create and write the audit events _after_ the update succeeds
-        audit_events = []
-        from .field_audit import request
-        request = request.get()
-        for instance in self:
-            init_values = old_values[instance.pk]
-            audit_event = AuditEvent.make_audit_event(
-                instance, False, False, request, init_values=init_values
-            )
-            if audit_event:
-                audit_events.append(audit_event)
-        if audit_events:
-            AuditEvent.objects.bulk_create(audit_events)
-        return value
+            rows = super().update(**kw)
+            # create and write the audit events _after_ the update succeeds
+            audit_events = []
+            from .field_audit import request
+            request = request.get()
+            for instance in self:
+                init_values = old_values[instance.pk]
+                audit_event = AuditEvent.make_audit_event(
+                    instance, False, False, request, init_values=init_values
+                )
+                if audit_event:
+                    audit_events.append(audit_event)
+            if audit_events:
+                AuditEvent.objects.bulk_create(audit_events)
+            return rows
 
 
 AuditingManager = models.Manager.from_queryset(AuditingQuerySet)
