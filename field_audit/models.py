@@ -577,8 +577,6 @@ class AuditingQuerySet(models.QuerySet):
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
-        from .field_audit import request
-        request = request.get()
 
         fields_to_update = set(kw.keys())
         audited_fields = set(
@@ -589,16 +587,17 @@ class AuditingQuerySet(models.QuerySet):
             # no audited fields are changing
             return super().update(**kw)
 
-        values_to_fetch = list(fields_to_update) + ['pk']
-        fetched_values = self.values(*values_to_fetch)
+        values_to_fetch = fields_to_update | {"pk"}
         old_values = {}
-        for value in fetched_values:
+        for value in self.values(*values_to_fetch):
             pk = value.pop('pk')
             old_values[pk] = value
 
         value = super().update(**kw)
         # create and write the audit events _after_ the update succeeds
         audit_events = []
+        from .field_audit import request
+        request = request.get()
         for instance in self:
             init_values = old_values[instance.pk]
             audit_event = AuditEvent.make_audit_event(
