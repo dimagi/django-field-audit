@@ -126,7 +126,7 @@ details:
   above) will raise an exception when the model class is evaluated.
 - At this time, only the `QuerySet.delete()` and `QuerySet.update()` "special"
   write methods can actually perform change auditing when called with 
-  `audit_action=AuditAction.AUDIT`. The other three methods are currently not
+  `audit_action=AuditAction.AUDIT`. The other two methods are currently not
   implemented and will raise `NotImplementedError` if called with that action.
   Implementing these remaining methods remains a task for the future, see
   **TODO** below. All four methods do support `audit_action=AuditAction.IGNORE`
