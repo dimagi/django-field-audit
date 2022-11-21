@@ -6,7 +6,7 @@ from unittest.mock import ANY, Mock, patch
 import django
 from django.conf import settings
 from django.db import connection, models, transaction
-from django.db.utils import IntegrityError
+from django.db.utils import DatabaseError, IntegrityError
 from django.test import TestCase, override_settings
 
 from field_audit.auditors import audit_dispatcher
@@ -865,6 +865,26 @@ class TestAuditingQuerySet(TestCase):
         queryset = AuditingQuerySet()
         with self.assertRaises(UnsetAuditActionError):
             queryset.update(value='updated')
+
+    def test_update_audit_action_audit_rolls_back_if_fails(self):
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+
+        queryset = ModelWithAuditingManager.objects.all()
+        with patch(
+                'field_audit.models.AuditEvent.make_audit_event'
+        ) as mocked_method:
+            mocked_method.side_effect = DatabaseError()
+            try:
+                queryset.update(value='updated', audit_action=AuditAction.AUDIT)
+            except DatabaseError:
+                pass
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual("initial", instance.value)
+
+        self.assertEqual(0, AuditEvent.objects.filter(object_pk=instance.pk,
+                                                      is_create=False,
+                                                      is_delete=False).count())
 
 
 class TestAuditEventBootstrapping(TestCase):
