@@ -253,6 +253,7 @@ twine upload dist/*
   - `bulk_update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
+- Wrap audited DB write methods in Django's transaction.atomic context manager
 
 ### Backlog
 
