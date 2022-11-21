@@ -4,7 +4,7 @@ from functools import wraps
 from itertools import islice
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import models, router, transaction
 
 from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
@@ -593,9 +593,7 @@ class AuditingQuerySet(models.QuerySet):
             pk = value.pop('pk')
             old_values[pk] = value
 
-        # open a transaction in db of audited model
-        db = self.first()._state.db
-        with transaction.atomic(using=db):
+        with transaction.atomic(using=router.db_for_write(self.model)):
             rows = super().update(**kw)
             # create and write the audit events _after_ the update succeeds
             from .field_audit import request
