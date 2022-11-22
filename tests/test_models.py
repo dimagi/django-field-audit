@@ -6,7 +6,7 @@ from unittest.mock import ANY, Mock, patch
 import django
 from django.conf import settings
 from django.db import connection, models, transaction
-from django.db.utils import IntegrityError
+from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
 
 from field_audit.auditors import audit_dispatcher
@@ -27,6 +27,7 @@ from field_audit.models import (
     get_manager,
     validate_audit_action,
 )
+from .exceptions import MakeAuditEventException
 
 from .models import (
     Aerodrome,
@@ -782,6 +783,34 @@ class TestAuditingQuerySet(TestCase):
             event.delta,
         )
 
+    def test_delete_audit_action_audit_rolls_back_if_make_audit_event_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        instance = ModelWithAuditingManager.objects.get(id=0)
+        self.assertIsNotNone(instance)
+
+    def test_delete_audit_action_audit_rolls_back_if_audit_event_save_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch.object(AuditEvent.objects, 'bulk_create',
+                           side_effect=DatabaseError),
+              self.assertRaises(DatabaseError)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
+
     def test_delete_audit_action_audit_noop_with_empty_queryset(self):
         queryset = ModelWithAuditingManager.objects.all()
         self.assertEqual([], list(queryset))
@@ -867,9 +896,6 @@ class TestAuditingQuerySet(TestCase):
             queryset.update(value='updated')
 
     def test_update_audit_action_audit_rolls_back_if_fails(self):
-        class MakeAuditEventException(Exception):
-            """Test specific exception for mocking make_audit_event"""
-
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
