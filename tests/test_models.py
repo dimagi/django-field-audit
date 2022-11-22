@@ -867,23 +867,19 @@ class TestAuditingQuerySet(TestCase):
             queryset.update(value='updated')
 
     def test_update_audit_action_audit_rolls_back_if_fails(self):
+        class MakeAuditEventException(Exception):
+            """Test specific exception for mocking make_audit_event"""
+
         ModelWithAuditingManager.objects.create(id=0, value="initial")
-
         queryset = ModelWithAuditingManager.objects.all()
-        # if make_audit_event fails for any reason, db changes should roll back
-        with patch('field_audit.models.AuditEvent.make_audit_event',
-                   side_effect=Exception()) as mocked_make_audit_event:
-            try:
-                queryset.update(value='updated', audit_action=AuditAction.AUDIT)
-            except Exception:
-                pass
 
-        mocked_make_audit_event.assert_called()
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            queryset.update(value='updated', audit_action=AuditAction.AUDIT)
+
         instance = ModelWithAuditingManager.objects.get(id=0)
         self.assertEqual("initial", instance.value)
-        self.assertEqual(0, AuditEvent.objects.filter(object_pk=instance.pk,
-                                                      is_create=False,
-                                                      is_delete=False).count())
 
 
 class TestAuditEventBootstrapping(TestCase):
