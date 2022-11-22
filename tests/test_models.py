@@ -872,12 +872,13 @@ class TestAuditingQuerySet(TestCase):
         queryset = ModelWithAuditingManager.objects.all()
         # if make_audit_event fails for any reason, db changes should roll back
         with patch('field_audit.models.AuditEvent.make_audit_event',
-                   side_effect=Exception()):
+                   side_effect=Exception()) as mocked_make_audit_event:
             try:
                 queryset.update(value='updated', audit_action=AuditAction.AUDIT)
             except Exception:
                 pass
 
+        mocked_make_audit_event.assert_called()
         instance = ModelWithAuditingManager.objects.get(id=0)
         self.assertEqual("initial", instance.value)
         self.assertEqual(0, AuditEvent.objects.filter(object_pk=instance.pk,
