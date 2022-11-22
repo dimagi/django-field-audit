@@ -37,6 +37,7 @@ from .models import (
     ModelWithAuditingManager,
     PkAuto,
     PkJson,
+    SimpleModel,
 )
 from .test_field_audit import override_audited_models
 
@@ -731,6 +732,43 @@ class TestValidateAuditAction(TestCase):
     @validate_audit_action
     def _func(self, *, audit_action=None):
         pass
+
+
+class TestAuditingModelRollbackBehavior(TestCase):
+
+    def test_create_rolls_back_if_audit_event_creation_fails(self):
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
+
+    def test_delete_rolls_back_if_audit_event_creation_fails(self):
+        self.assertEqual(0, AuditEvent.objects.all().count())
+        instance = SimpleModel.objects.create(id=0, value='initial')
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            instance.delete()
+
+        try:
+            SimpleModel.objects.get(id=0)
+        except SimpleModel.DoesNotExist:
+            self.fail("Failed to rollback deletion of SimpleModel instance.")
+
+    def test_save_rolls_back_if_audit_event_creation_fails(self):
+        self.assertEqual(0, AuditEvent.objects.all().count())
+        instance = SimpleModel.objects.create(id=0, value='initial')
+        instance.value = 'updated'
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            instance.save()
+
+        refetched_instance = SimpleModel.objects.get(id=0)
+        self.assertEqual('initial', refetched_instance.value)
 
 
 class TestAuditingQuerySet(TestCase):

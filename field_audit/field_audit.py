@@ -1,7 +1,7 @@
 import contextvars
 from functools import wraps
 
-from django.db import models
+from django.db import models, router, transaction
 
 from .utils import get_fqcn
 
@@ -116,15 +116,18 @@ def _decorate_db_write(func):
         # - https://stackoverflow.com/questions/907695/
         is_create = is_save and self._state.adding
         object_pk = self.pk if is_delete else None
-        ret = func(self, *args, **kw)
-        AuditEvent.audit_field_changes(
-            self,
-            is_create,
-            is_delete,
-            request.get(),
-            object_pk,
-        )
-        return ret
+
+        db = router.db_for_write(type(self))
+        with transaction.atomic(using=db):
+            ret = func(self, *args, **kw)
+            AuditEvent.audit_field_changes(
+                self,
+                is_create,
+                is_delete,
+                request.get(),
+                object_pk,
+            )
+            return ret
     is_save = func.__name__ == "save"
     is_delete = func.__name__ == "delete"
     if not is_save and not is_delete:
