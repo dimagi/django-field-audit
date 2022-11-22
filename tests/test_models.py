@@ -794,17 +794,92 @@ class TestAuditingQuerySet(TestCase):
             queryset.delete(audit_action=AuditAction.IGNORE)
             super_meth.assert_called()
 
-    def test_update_audit_action_audit_is_not_implemented(self):
-        queryset = AuditingQuerySet()
-        with self.assertRaises(NotImplementedError):
-            queryset.update([], audit_action=AuditAction.AUDIT)
+    def test_update_audit_action_audit_creates_audit_events(self):
+        for pkey in range(2):
+            ModelWithAuditingManager.objects.create(id=pkey, value="initial")
 
-    def test_update_audit_action_ignore_calls_super(self):
+        queryset = ModelWithAuditingManager.objects.all()
+        queryset.update(value='updated', audit_action=AuditAction.AUDIT)
+
+        instances = ModelWithAuditingManager.objects.all()
+        for instance in instances:
+            self.assertEqual("updated", instance.value)
+            event, = AuditEvent.objects.filter(object_pk=instance.pk,
+                                               is_create=False, is_delete=False)
+            self.assertEqual(
+                "tests.models.ModelWithAuditingManager",
+                event.object_class_path,
+            )
+            self.assertEqual(
+                {"value": {"old": "initial", "new": "updated"}},
+                event.delta,
+            )
+
+    def test_update_audit_action_audit_does_not_create_audit_events_if_audited_field_stays_the_same(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+
+        queryset = ModelWithAuditingManager.objects.all()
+        queryset.update(value='initial', audit_action=AuditAction.AUDIT)
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
+        )
+
+    def test_update_audit_action_audit_does_not_create_audit_events_if_no_audited_field_updated(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+
+        queryset = ModelWithAuditingManager.objects.all()
+        queryset.update(
+            non_audited_field='updated', audit_action=AuditAction.AUDIT
+        )
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(instance.value, 'initial')
+        self.assertEqual(instance.non_audited_field, 'updated')
+        self.assertEqual(
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
+        )
+
+    def test_update_audit_action_ignore_does_not_create_audit_events(self):
+        ModelWithAuditingManager.objects.create(id=0, value="number")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        queryset.update(value='updated', audit_action=AuditAction.IGNORE)
+
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(instance.value, 'updated')
+        self.assertEqual(
+            0, AuditEvent.objects.filter(object_pk=instance.pk, is_create=False,
+                                         is_delete=False).count()
+        )
+
+    def test_update_audit_action_raise_raises_exception(self):
         queryset = AuditingQuerySet()
-        items = object()
-        with patch.object(models.QuerySet, "update") as super_meth:
-            queryset.update(items, audit_action=AuditAction.IGNORE)
-            super_meth.assert_called_with(items)
+        with self.assertRaises(UnsetAuditActionError):
+            queryset.update(value='updated', audit_action=AuditAction.RAISE)
+
+    def test_update_audit_action_default_raises_exception(self):
+        queryset = AuditingQuerySet()
+        with self.assertRaises(UnsetAuditActionError):
+            queryset.update(value='updated')
+
+    def test_update_audit_action_audit_rolls_back_if_fails(self):
+        class MakeAuditEventException(Exception):
+            """Test specific exception for mocking make_audit_event"""
+
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            queryset.update(value='updated', audit_action=AuditAction.AUDIT)
+
+        instance = ModelWithAuditingManager.objects.get(id=0)
+        self.assertEqual("initial", instance.value)
 
 
 class TestAuditEventBootstrapping(TestCase):

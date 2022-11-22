@@ -26,6 +26,7 @@ class SimpleModel(Model):
 class ModelWithAuditingManager(Model):
     id = AutoField(primary_key=True)
     value = CharField(max_length=8, null=True)
+    non_audited_field = CharField(max_length=12, null=True)
     objects = AuditingManager()
 
 

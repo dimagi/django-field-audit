@@ -124,12 +124,13 @@ details:
 - Specifying `audit_special_queryset_writes=True` (step **1** above) without
   setting the default manager to an instance of `AuditingManager` (step **2**
   above) will raise an exception when the model class is evaluated.
-- At this time, only the `QuerySet.delete()` "special" write method can actually
-  perform change auditing when called with `audit_action=AuditAction.AUDIT`. The
-  other three methods are currently not implemented and will raise
-  `NotImplementedError` if called with that action. Implementing these remaining
-  methods remains a task for the future, see **TODO** below. All four methods do
-  support `audit_action=AuditAction.IGNORE` usage, however.
+- At this time, only the `QuerySet.delete()` and `QuerySet.update()` "special"
+  write methods can actually perform change auditing when called with 
+  `audit_action=AuditAction.AUDIT`. The other two methods are currently not
+  implemented and will raise `NotImplementedError` if called with that action.
+  Implementing these remaining methods remains a task for the future, see
+  **TODO** below. All four methods do support `audit_action=AuditAction.IGNORE`
+  usage, however.
 
 #### Bootstrap events for models with existing records
 
@@ -250,9 +251,9 @@ twine upload dist/*
 - Implement auditing for the remaining "special" QuerySet write operations:
   - `bulk_create()`
   - `bulk_update()`
-  - `update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
+- Wrap audited DB write methods in Django's transaction.atomic context manager
 
 ### Backlog
 

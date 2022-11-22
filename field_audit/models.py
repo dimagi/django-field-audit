@@ -4,7 +4,7 @@ from functools import wraps
 from itertools import islice
 
 from django.conf import settings
-from django.db import models
+from django.db import models, router, transaction
 
 from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
@@ -305,7 +305,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def make_audit_event(cls, instance, is_create, is_delete,
-                         request, object_pk=None):
+                         request, object_pk=None, init_values=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -320,6 +320,9 @@ class AuditEvent(models.Model):
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
+        :param init_values: (Optional) dictionary of initial values for audited
+            fields on the provided instance. If not provided, will use
+            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
@@ -331,9 +334,11 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
         # fetch (and reset for next db write operation) initial values
-        init_values = cls.reset_initial_values(instance)
+        fields_to_audit = init_values.keys() if init_values else \
+            cls._field_names(instance)
+        init_values = init_values or cls.reset_initial_values(instance)
         delta = {}
-        for field_name in cls._field_names(instance):
+        for field_name in fields_to_audit:
             value = cls.get_field_value(instance, field_name)
             if is_create:
                 delta[field_name] = {"new": value}
@@ -568,13 +573,42 @@ class AuditingQuerySet(models.QuerySet):
         return value
 
     @validate_audit_action
-    def update(self, *args, audit_action=AuditAction.RAISE, **kw):
+    def update(self, audit_action=AuditAction.RAISE, **kw):
         if audit_action is AuditAction.IGNORE:
-            return super().update(*args, **kw)
-        else:
-            raise NotImplementedError(
-                "Change auditing is not implemented for update()."
-            )
+            return super().update(**kw)
+        assert audit_action is AuditAction.AUDIT, audit_action
+
+        fields_to_update = set(kw.keys())
+        audited_fields = set(
+            getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT)
+        )
+        fields_to_audit = fields_to_update & audited_fields
+        if not fields_to_audit:
+            # no audited fields are changing
+            return super().update(**kw)
+
+        values_to_fetch = fields_to_update | {"pk"}
+        old_values = {}
+        for value in self.values(*values_to_fetch):
+            pk = value.pop('pk')
+            old_values[pk] = value
+
+        with transaction.atomic(using=router.db_for_write(self.model)):
+            rows = super().update(**kw)
+            # create and write the audit events _after_ the update succeeds
+            from .field_audit import request
+            request = request.get()
+            audit_events = []
+            for instance in self:
+                init_values = old_values[instance.pk]
+                audit_event = AuditEvent.make_audit_event(
+                    instance, False, False, request, init_values=init_values
+                )
+                if audit_event:
+                    audit_events.append(audit_event)
+            if audit_events:
+                AuditEvent.objects.bulk_create(audit_events)
+            return rows
 
 
 AuditingManager = models.Manager.from_queryset(AuditingQuerySet)
