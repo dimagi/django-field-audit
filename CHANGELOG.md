@@ -1,5 +1,8 @@
 # Django Field Audit change log
 
+## v1.2.4 - 2022-11-22
+- Add support for auditing `QuerySet.update` method
+
 ## v1.2.3 - 2022-09-02
 
 - Use batching by default for all bootstrap operations
