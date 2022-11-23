@@ -28,6 +28,7 @@ from field_audit.models import (
     validate_audit_action,
 )
 from .exceptions import MakeAuditEventException
+from .mocks import NoopAtomicTransaction
 
 from .models import (
     Aerodrome,
@@ -769,6 +770,38 @@ class TestAuditingModelRollbackBehavior(TestCase):
 
         refetched_instance = SimpleModel.objects.get(id=0)
         self.assertEqual('initial', refetched_instance.value)
+
+    def test_get_or_create_rolls_back_if_audit_event_creation_fails(self):
+        """
+        QuerySet.get_or_create wraps the create call in a transaction already,
+        so we mock that transaction to ensure that the transaction in
+        field_audit.py is behaving as expected
+        """
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              patch('django.db.models.query.transaction',
+                    NoopAtomicTransaction()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.get_or_create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
+
+    def test_update_or_create_rolls_back_if_audit_event_creation_fails(self):
+        """
+        QuerySet.update_or_create wraps the create call in a transaction
+        already, so we mock that transaction to ensure that the transaction in
+        field_audit.py is behaving as expected
+        """
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              patch('django.db.models.query.transaction',
+                    NoopAtomicTransaction()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.update_or_create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
 
 
 class TestAuditingQuerySet(TestCase):
