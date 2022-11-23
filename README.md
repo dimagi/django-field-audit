@@ -131,6 +131,9 @@ details:
   Implementing these remaining methods remains a task for the future, see
   **TODO** below. All four methods do support `audit_action=AuditAction.IGNORE`
   usage, however.
+- All audited methods use transactions to ensure changes to audited models
+  are only committed to the database if audit events are successfully created
+  and saved as well.
 
 #### Bootstrap events for models with existing records
 
@@ -253,7 +256,6 @@ twine upload dist/*
   - `bulk_update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
-- Wrap audited DB write methods in Django's transaction.atomic context manager
 
 ### Backlog
 
