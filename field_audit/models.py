@@ -580,7 +580,7 @@ class AuditingQuerySet(models.QuerySet):
         return value
 
     @validate_audit_action
-    def update(self, audit_action=AuditAction.RAISE, **kw):
+    def update(self, *, audit_action=AuditAction.RAISE, **kw):
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
