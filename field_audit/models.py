@@ -490,7 +490,14 @@ def validate_audit_action(func):
     :raises: ``InvalidAuditActionError`` or ``UnsetAuditActionError``
     """
     @wraps(func)
-    def wrapper(self, *args, audit_action=AuditAction.RAISE, **kw):
+    def wrapper(self, *args, **kw):
+        try:
+            audit_action = kw["audit_action"]
+        except KeyError:
+            raise UnsetAuditActionError(
+                f"{type(self).__name__}.{func.__name__}() requires an audit "
+                "action as a keyword argument."
+            )
         if audit_action not in AuditAction:
             raise InvalidAuditActionError(
                 "The 'audit_action' argument must be a value of 'AuditAction', "
@@ -501,7 +508,7 @@ def validate_audit_action(func):
                 f"{type(self).__name__}.{func.__name__}() requires an audit "
                 "action"
             )
-        return func(self, *args, audit_action=audit_action, **kw)
+        return func(self, *args, **kw)
     return wrapper
 
 
