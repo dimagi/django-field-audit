@@ -717,9 +717,22 @@ class TestValidateAuditAction(TestCase):
     def test_validate_audit_action_ignore(self):
         self._func(audit_action=AuditAction.IGNORE)  # does not raise
 
-    def test_validate_audit_action_raises_unsetauditactionerror(self):
-        with self.assertRaises(UnsetAuditActionError):
+    def test_validate_audit_action_raise(self):
+        with self.assertRaises(UnsetAuditActionError) as test:
+            self._func(audit_action=AuditAction.RAISE)
+        self.assertEqual(
+            str(test.exception),
+            "TestValidateAuditAction._func() requires an audit action",
+        ),
+
+    def test_validate_audit_action_requires_keyword_argument(self):
+        with self.assertRaises(UnsetAuditActionError) as test:
             self._func()
+        self.assertEqual(
+            str(test.exception),
+            "TestValidateAuditAction._func() requires an audit action as a "
+            "keyword argument.",
+        ),
 
     def test_validate_audit_action_raises_invalidauditactionerror(self):
         class Action(Enum):
