@@ -581,6 +581,12 @@ class AuditingQuerySet(models.QuerySet):
 
     @validate_audit_action
     def update(self, *, audit_action=AuditAction.RAISE, **kw):
+        """
+        In order to determine what the old and new values of instances within
+        the queryset, one additional fetch on this queryset is performed,
+        resulting in two fetches of items in the queryset and one bulk creation
+        of audit events
+        """
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
