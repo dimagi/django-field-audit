@@ -6,7 +6,7 @@ from unittest.mock import ANY, Mock, patch
 import django
 from django.conf import settings
 from django.db import connection, models, transaction
-from django.db.utils import IntegrityError
+from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
 
 from field_audit.auditors import audit_dispatcher
@@ -27,6 +27,8 @@ from field_audit.models import (
     get_manager,
     validate_audit_action,
 )
+from .exceptions import MakeAuditEventException
+from .mocks import NoopAtomicTransaction
 
 from .models import (
     Aerodrome,
@@ -36,6 +38,7 @@ from .models import (
     ModelWithAuditingManager,
     PkAuto,
     PkJson,
+    SimpleModel,
 )
 from .test_field_audit import override_audited_models
 
@@ -745,6 +748,75 @@ class TestValidateAuditAction(TestCase):
         pass
 
 
+class TestAuditingModelRollbackBehavior(TestCase):
+
+    def test_create_rolls_back_if_audit_event_creation_fails(self):
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
+
+    def test_delete_rolls_back_if_audit_event_creation_fails(self):
+        self.assertEqual(0, AuditEvent.objects.all().count())
+        instance = SimpleModel.objects.create(id=0, value='initial')
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            instance.delete()
+
+        try:
+            SimpleModel.objects.get(id=0)
+        except SimpleModel.DoesNotExist:
+            self.fail("Failed to rollback deletion of SimpleModel instance.")
+
+    def test_save_rolls_back_if_audit_event_creation_fails(self):
+        self.assertEqual(0, AuditEvent.objects.all().count())
+        instance = SimpleModel.objects.create(id=0, value='initial')
+        instance.value = 'updated'
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            instance.save()
+
+        refetched_instance = SimpleModel.objects.get(id=0)
+        self.assertEqual('initial', refetched_instance.value)
+
+    def test_get_or_create_rolls_back_if_audit_event_creation_fails(self):
+        """
+        QuerySet.get_or_create wraps the create call in a transaction already,
+        so we mock that transaction to ensure that the transaction in
+        field_audit.py is behaving as expected
+        """
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              patch('django.db.models.query.transaction',
+                    NoopAtomicTransaction()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.get_or_create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
+
+    def test_update_or_create_rolls_back_if_audit_event_creation_fails(self):
+        """
+        QuerySet.update_or_create wraps the create call in a transaction
+        already, so we mock that transaction to ensure that the transaction in
+        field_audit.py is behaving as expected
+        """
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              patch('django.db.models.query.transaction',
+                    NoopAtomicTransaction()),
+              self.assertRaises(MakeAuditEventException)):
+            SimpleModel.objects.update_or_create(id=0)
+
+        with self.assertRaises(SimpleModel.DoesNotExist):
+            SimpleModel.objects.get(id=0)
+
+
 class TestAuditingQuerySet(TestCase):
 
     def test_bulk_create_audit_action_audit_is_not_implemented(self):
@@ -794,6 +866,38 @@ class TestAuditingQuerySet(TestCase):
             {"id": {"old": 0}, "value": {"old": "even"}},
             event.delta,
         )
+
+    def test_delete_audit_action_audit_rolls_back_if_make_audit_event_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch('field_audit.models.AuditEvent.make_audit_event',
+                    side_effect=MakeAuditEventException()),
+              self.assertRaises(MakeAuditEventException)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
+
+    def test_delete_audit_action_audit_rolls_back_if_audit_event_save_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch.object(AuditEvent.objects, 'bulk_create',
+                           side_effect=DatabaseError),
+              self.assertRaises(DatabaseError)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
 
     def test_delete_audit_action_audit_noop_with_empty_queryset(self):
         queryset = ModelWithAuditingManager.objects.all()
@@ -880,9 +984,6 @@ class TestAuditingQuerySet(TestCase):
             queryset.update(value='updated')
 
     def test_update_audit_action_audit_rolls_back_if_fails(self):
-        class MakeAuditEventException(Exception):
-            """Test specific exception for mocking make_audit_event"""
-
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
