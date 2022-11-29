@@ -863,8 +863,12 @@ class TestAuditingQuerySet(TestCase):
               self.assertRaises(MakeAuditEventException)):
             queryset.delete(audit_action=AuditAction.AUDIT)
 
-        instance = ModelWithAuditingManager.objects.get(id=0)
-        self.assertIsNotNone(instance)
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
 
     def test_delete_audit_action_audit_rolls_back_if_audit_event_save_fails(self):  # noqa: E501
         ModelWithAuditingManager.objects.create(id=0, value="initial")
