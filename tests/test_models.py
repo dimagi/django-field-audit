@@ -27,7 +27,7 @@ from field_audit.models import (
     get_manager,
     validate_audit_action,
 )
-from .exceptions import MakeAuditEventException
+from .exceptions import CreateAuditEventException, MakeAuditEventException
 from .mocks import NoopAtomicTransaction
 
 from .models import (
@@ -1066,9 +1066,9 @@ class TestAuditingQuerySet(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch('field_audit.models.AuditEvent.create_audit_event',
+                    side_effect=CreateAuditEventException()),
+              self.assertRaises(CreateAuditEventException)):
             queryset.update(value='updated', audit_action=AuditAction.AUDIT)
 
         instance = ModelWithAuditingManager.objects.get(id=0)

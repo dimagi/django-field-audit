@@ -404,17 +404,24 @@ class AuditEvent(models.Model):
                                             init_values)
 
         if delta:
-            from .auditors import audit_dispatcher
-            from .field_audit import get_audited_class_path
-            change_context = audit_dispatcher.dispatch(request)
-            return cls(
-                object_class_path=get_audited_class_path(type(instance)),
-                object_pk=object_pk,
-                change_context=cls._change_context_db_value(change_context),
-                is_create=is_create,
-                is_delete=is_delete,
-                delta=delta,
-            )
+            return cls.create_audit_event(object_pk, type(instance), delta,
+                                          is_create, is_delete, request)
+
+    @classmethod
+    def create_audit_event(cls, object_pk, object_cls, delta, is_create,
+                           is_delete, request):
+        from .auditors import audit_dispatcher
+        from .field_audit import get_audited_class_path
+        change_context = audit_dispatcher.dispatch(request)
+        object_cls_path = get_audited_class_path(object_cls)
+        return cls(
+            object_class_path=object_cls_path,
+            object_pk=object_pk,
+            change_context=cls._change_context_db_value(change_context),
+            is_create=is_create,
+            is_delete=is_delete,
+            delta=delta,
+        )
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
@@ -653,8 +660,10 @@ class AuditingQuerySet(models.QuerySet):
             # no audited fields are changing
             return super().update(**kw)
 
-        values_to_fetch = fields_to_update | {"pk"}
+        new_values = {field: kw[field] for field in fields_to_audit}
+
         old_values = {}
+        values_to_fetch = fields_to_update | {"pk"}
         for value in self.values(*values_to_fetch):
             pk = value.pop('pk')
             old_values[pk] = value
@@ -665,13 +674,15 @@ class AuditingQuerySet(models.QuerySet):
             from .field_audit import request
             request = request.get()
             audit_events = []
-            for instance in self:
-                init_values = old_values[instance.pk]
-                audit_event = AuditEvent.make_audit_event(
-                    instance, False, False, request, init_values=init_values
-                )
-                if audit_event:
-                    audit_events.append(audit_event)
+
+            for pk, old_values_for_pk in old_values.items():
+                delta = AuditEvent.create_delta(old_values_for_pk, new_values)
+                if delta:
+                    audit_event = AuditEvent.create_audit_event(
+                        pk, self.model, delta, False, False, request
+                    )
+                    if audit_event:
+                        audit_events.append(audit_event)
             if audit_events:
                 AuditEvent.objects.bulk_create(audit_events)
             return rows
