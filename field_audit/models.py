@@ -304,8 +304,7 @@ class AuditEvent(models.Model):
             event.save()
 
     @classmethod
-    def get_delta_from_instance(cls, instance, is_create, is_delete,
-                                init_values=None):
+    def get_delta_from_instance(cls, instance, is_create, is_delete):
         """
         Returns a dictionary representing the delta of an instance of a model
         being audited for changes.
@@ -315,19 +314,14 @@ class AuditEvent(models.Model):
             record (setting ``True`` implies that ``instance`` is changing)
         :param is_delete: whether or not the audited event deletes an existing
             DB record (setting ``True`` implies that ``instance`` is changing)
-        :param init_values: (Optional) dictionary of initial values for audited
-            fields on the provided instance. If not provided, will use
-            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both is_create and is_delete are true
         """
         assert not (is_create and is_delete),\
             "is_create and is_delete cannot both be true"
-        fields_to_audit = init_values.keys() if init_values else \
-            cls._field_names(instance)
+        fields_to_audit = cls._field_names(instance)
         # fetch (and reset for next db write operation) initial values
-        old_values = {} if is_create else \
-            init_values or cls.reset_initial_values(instance)
+        old_values = {} if is_create else cls.reset_initial_values(instance)
         new_values = {} if is_delete else \
             {f: cls.get_field_value(instance, f) for f in fields_to_audit}
         return cls.create_delta(old_values, new_values)
@@ -371,7 +365,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def make_audit_event(cls, instance, is_create, is_delete,
-                         request, object_pk=None, init_values=None):
+                         request, object_pk=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -386,9 +380,6 @@ class AuditEvent(models.Model):
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
-        :param init_values: (Optional) dictionary of initial values for audited
-            fields on the provided instance. If not provided, will use
-            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
@@ -400,8 +391,7 @@ class AuditEvent(models.Model):
                 )
             object_pk = instance.pk
 
-        delta = cls.get_delta_from_instance(instance, is_create, is_delete,
-                                            init_values)
+        delta = cls.get_delta_from_instance(instance, is_create, is_delete)
 
         if delta:
             return cls.create_audit_event(object_pk, type(instance), delta,

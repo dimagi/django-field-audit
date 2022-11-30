@@ -736,17 +736,6 @@ class TestAuditEvent(TestCase):
               self.assertRaises(AssertionError)):
             AuditEvent.get_delta_from_instance(instance, True, True)
 
-    @audit_field_names(TestModel, ["value"])
-    def test_get_delta_from_instance_overrides_old_value_with_init_values_if_provided(self):  # noqa: E501
-        instance = TestModel(id=1, value=1)
-        AuditEvent.attach_initial_values(instance)
-        instance.value = 2
-        with override_audited_models({TestModel: "TestModel"}):
-            delta = AuditEvent.get_delta_from_instance(
-                instance, False, False, init_values={'value': 10}
-            )
-        self.assertEqual(delta, {'value': {'old': 10, 'new': 2}})
-
     def test_create_delta_returns_new_when_old_values_is_empty(self):
         old_values = {}
         new_values = {'f1': 'initial', 'f2': 0}
