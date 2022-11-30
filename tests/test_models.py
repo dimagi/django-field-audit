@@ -27,7 +27,10 @@ from field_audit.models import (
     get_manager,
     validate_audit_action,
 )
-from .exceptions import CreateAuditEventException, MakeAuditEventException
+from .exceptions import (
+    MakeAuditEventException,
+    MakeAuditEventFromValuesException,
+)
 from .mocks import NoopAtomicTransaction
 
 from .models import (
@@ -700,6 +703,45 @@ class TestAuditEvent(TestCase):
             ))
         self.assertAuditTablesEmpty()
 
+    def test_make_audit_event_from_values_returns_unsaved_event_for_change(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {'f1': 'updated'}, 1, TestModel, None
+            )
+        self.assertIsNotNone(audit_event)
+        self.assertAuditTablesEmpty()
+
+    def test_make_audit_event_from_values_returns_none_for_non_change(self):
+        audit_event = AuditEvent.make_audit_event_from_values(
+            {'f1': 'initial'}, {'f1': 'initial'}, 1, TestModel, None
+        )
+        self.assertIsNone(audit_event)
+        self.assertAuditTablesEmpty()
+
+    def test_make_audit_event_from_values_sets_is_create_to_true_if_no_old_values(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {}, {'f1': 'initial'}, 1, TestModel, None
+            )
+        self.assertTrue(audit_event.is_create)
+        self.assertFalse(audit_event.is_delete)
+
+    def test_make_audit_event_from_values_sets_is_delete_to_true_if_no_new_values(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {}, 1, TestModel, None
+            )
+        self.assertFalse(audit_event.is_create)
+        self.assertTrue(audit_event.is_delete)
+
+    def test_make_audit_event_from_values_sets_both_create_and_delete_to_false_if_change(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {'f1': 'updated'}, 1, TestModel, None
+            )
+        self.assertFalse(audit_event.is_create)
+        self.assertFalse(audit_event.is_delete)
+
     @audit_field_names(TestModel, ["value"])
     def test_get_delta_returns_new_value_for_create(self):
         instance = TestModel(id=1, value=1)
@@ -732,17 +774,6 @@ class TestAuditEvent(TestCase):
         with (override_audited_models({TestModel: "TestModel"}),
               self.assertRaises(AssertionError)):
             AuditEvent.get_delta_from_instance(instance, True, True)
-
-    @audit_field_names(TestModel, ["value"])
-    def test_get_delta_from_instance_overrides_old_value_with_init_values_if_provided(self):  # noqa: E501
-        instance = TestModel(id=1, value=1)
-        AuditEvent.attach_initial_values(instance)
-        instance.value = 2
-        with override_audited_models({TestModel: "TestModel"}):
-            delta = AuditEvent.get_delta_from_instance(
-                instance, False, False, init_values={'value': 10}
-            )
-        self.assertEqual(delta, {'value': {'old': 10, 'new': 2}})
 
     def test_create_delta_returns_new_when_old_values_is_empty(self):
         old_values = {}
@@ -1066,9 +1097,9 @@ class TestAuditingQuerySet(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.create_audit_event',
-                    side_effect=CreateAuditEventException()),
-              self.assertRaises(CreateAuditEventException)):
+        with (patch('field_audit.models.AuditEvent.make_audit_event_from_values',  # noqa: E501
+                    side_effect=MakeAuditEventFromValuesException()),
+              self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.update(value='updated', audit_action=AuditAction.AUDIT)
 
         instance = ModelWithAuditingManager.objects.get(id=0)
