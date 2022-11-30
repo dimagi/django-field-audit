@@ -744,6 +744,41 @@ class TestAuditEvent(TestCase):
             )
         self.assertEqual(delta, {'value': {'old': 10, 'new': 2}})
 
+    def test_create_delta_returns_new_when_old_values_is_empty(self):
+        old_values = {}
+        new_values = {'f1': 'initial', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'new': 'initial'}, 'f2': {'new': 0}})
+
+    def test_create_delta_returns_old_when_new_values_is_empty(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial'}, 'f2': {'old': 0}})
+
+    def test_create_delta_returns_old_and_new_when_changes(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {'f1': 'updated', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial', 'new': 'updated'}})
+
+    def test_create_delta_returns_new_when_old_values_missing_field(self):
+        old_values = {'f1': 'initial'}
+        new_values = {'f1': 'updated', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial', 'new': 'updated'},
+                                 'f2': {'new': 0}})
+
+    def test_create_delta_returns_empty_when_no_changes(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {'f1': 'initial', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertFalse(delta)
+
+    def test_create_delta_raises_exception_if_old_and_new_values_are_empty(self):  # noqa: E501
+        with self.assertRaises(AssertionError):
+            AuditEvent.create_delta({}, {})
+
     def test__change_context_db_value_returns_empty_dict_for_none(self):
         self.assertEqual({}, AuditEvent._change_context_db_value(None))
 
