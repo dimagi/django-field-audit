@@ -304,6 +304,47 @@ class AuditEvent(models.Model):
             event.save()
 
     @classmethod
+    def get_delta_from_instance(cls, instance, is_create, is_delete,
+                                init_values=None):
+        """
+        Returns a dictionary representing the delta of an instance of a model
+        being audited for changes.
+
+        :param instance: instance of a Model subclass to be audited for changes
+        :param is_create: whether or not the audited event creates a new DB
+            record (setting ``True`` implies that ``instance`` is changing)
+        :param is_delete: whether or not the audited event deletes an existing
+            DB record (setting ``True`` implies that ``instance`` is changing)
+        :param init_values: (Optional) dictionary of initial values for audited
+            fields on the provided instance. If not provided, will use
+            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
+        :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
+        :raises: ``AssertionError`` if both is_create and is_delete are true
+        """
+        assert not (is_create and is_delete),\
+            "is_create and is_delete cannot both be true"
+        # fetch (and reset for next db write operation) initial values
+        fields_to_audit = init_values.keys() if init_values else \
+            cls._field_names(instance)
+        init_values = init_values or cls.reset_initial_values(instance)
+        delta = {}
+        for field_name in fields_to_audit:
+            value = cls.get_field_value(instance, field_name)
+            if is_create:
+                delta[field_name] = {"new": value}
+            elif is_delete:
+                delta[field_name] = {"old": value}
+            else:
+                try:
+                    init_value = init_values[field_name]
+                except KeyError:
+                    delta[field_name] = {"new": value}
+                else:
+                    if init_value != value:
+                        delta[field_name] = {"old": init_value, "new": value}
+        return delta
+
+    @classmethod
     def make_audit_event(cls, instance, is_create, is_delete,
                          request, object_pk=None, init_values=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
@@ -333,25 +374,10 @@ class AuditEvent(models.Model):
                     "'object_pk' arg is ambiguous when 'is_delete == False'"
                 )
             object_pk = instance.pk
-        # fetch (and reset for next db write operation) initial values
-        fields_to_audit = init_values.keys() if init_values else \
-            cls._field_names(instance)
-        init_values = init_values or cls.reset_initial_values(instance)
-        delta = {}
-        for field_name in fields_to_audit:
-            value = cls.get_field_value(instance, field_name)
-            if is_create:
-                delta[field_name] = {"new": value}
-            elif is_delete:
-                delta[field_name] = {"old": value}
-            else:
-                try:
-                    init_value = init_values[field_name]
-                except KeyError:
-                    delta[field_name] = {"new": value}
-                else:
-                    if init_value != value:
-                        delta[field_name] = {"old": init_value, "new": value}
+
+        delta = cls.get_delta_from_instance(instance, is_create, is_delete,
+                                            init_values)
+
         if delta:
             from .auditors import audit_dispatcher
             from .field_audit import get_audited_class_path
