@@ -323,25 +323,50 @@ class AuditEvent(models.Model):
         """
         assert not (is_create and is_delete),\
             "is_create and is_delete cannot both be true"
-        # fetch (and reset for next db write operation) initial values
         fields_to_audit = init_values.keys() if init_values else \
             cls._field_names(instance)
-        init_values = init_values or cls.reset_initial_values(instance)
+        # fetch (and reset for next db write operation) initial values
+        old_values = {} if is_create else \
+            init_values or cls.reset_initial_values(instance)
+        new_values = {} if is_delete else \
+            {f: cls.get_field_value(instance, f) for f in fields_to_audit}
+        return cls.create_delta(old_values, new_values)
+
+    @staticmethod
+    def create_delta(old_values, new_values):
+        """
+        Compares two dictionaries and creates a delta between the two
+
+        :param old_values: {field_name: field_value, ...} representing the
+        values prior to a change
+        :param new_values: {field_name: field_value, ...} representing the
+        values after a change
+        :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
+        :raises: ``AssertionError`` if both old_values and new_values are empty
+        do not match
+        """
+        assert old_values or new_values, \
+            "Must provide a non-empty value for either old_values or new_values"
+
+        changed_fields = old_values.keys() if old_values else new_values.keys()
+        if old_values and new_values:
+            changed_fields = new_values.keys()
+
         delta = {}
-        for field_name in fields_to_audit:
-            value = cls.get_field_value(instance, field_name)
-            if is_create:
-                delta[field_name] = {"new": value}
-            elif is_delete:
-                delta[field_name] = {"old": value}
+        for field_name in changed_fields:
+            if not old_values:
+                delta[field_name] = {"new": new_values[field_name]}
+            elif not new_values:
+                delta[field_name] = {"old": old_values[field_name]}
             else:
                 try:
-                    init_value = init_values[field_name]
+                    old_value = old_values[field_name]
                 except KeyError:
-                    delta[field_name] = {"new": value}
+                    delta[field_name] = {"new": new_values[field_name]}
                 else:
-                    if init_value != value:
-                        delta[field_name] = {"old": init_value, "new": value}
+                    if old_value != new_values[field_name]:
+                        delta[field_name] = {"old": old_value,
+                                             "new": new_values[field_name]}
         return delta
 
     @classmethod
