@@ -700,6 +700,50 @@ class TestAuditEvent(TestCase):
             ))
         self.assertAuditTablesEmpty()
 
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_returns_new_value_for_create(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, True, False)
+        self.assertEqual(delta, {'value': {'new': 1}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_returns_old_value_for_delete(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, False, True)
+        self.assertEqual(delta, {'value': {'old': 1}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_returns_old_and_new_value_for_update(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        instance.value = 2
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, False, False)
+        self.assertEqual(delta, {'value': {'old': 1, 'new': 2}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_raises_assertion_if_create_and_delete_both_true(self):  # noqa: E501
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with (override_audited_models({TestModel: "TestModel"}),
+              self.assertRaises(AssertionError)):
+            AuditEvent.get_delta_from_instance(instance, True, True)
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_overrides_old_value_with_init_values_if_provided(self):  # noqa: E501
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        instance.value = 2
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(
+                instance, False, False, init_values={'value': 10}
+            )
+        self.assertEqual(delta, {'value': {'old': 10, 'new': 2}})
+
     def test__change_context_db_value_returns_empty_dict_for_none(self):
         self.assertEqual({}, AuditEvent._change_context_db_value(None))
 
