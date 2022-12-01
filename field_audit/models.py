@@ -293,13 +293,13 @@ class AuditEvent(models.Model):
 
     @classmethod
     def audit_field_changes(cls, *args, **kw):
-        """Convenience method that calls ``make_audit_event()`` and saves the
-        event (if one is returned).
+        """Convenience method that calls ``make_audit_event_from_instance()``
+        and saves the event (if one is returned).
 
-        All [keyword] arguments are passed directly to ``make_audit_event()``,
-        see that method for usage.
+        All [keyword] arguments are passed directly to
+        ``make_audit_event_from_instance()``, see that method for usage.
         """
-        event = cls.make_audit_event(*args, **kw)
+        event = cls.make_audit_event_from_instance(*args, **kw)
         if event is not None:
             event.save()
 
@@ -364,8 +364,8 @@ class AuditEvent(models.Model):
         return delta
 
     @classmethod
-    def make_audit_event(cls, instance, is_create, is_delete,
-                         request, object_pk=None):
+    def make_audit_event_from_instance(cls, instance, is_create, is_delete,
+                                       request, object_pk=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -637,8 +637,8 @@ class AuditingQuerySet(models.QuerySet):
         request = request.get()
         audit_events = []
         for instance in self:
-            # make_audit_event() will never return None because delete=True
-            audit_events.append(AuditEvent.make_audit_event(
+            # make_audit_event_from_instance cannot return None when delete=True
+            audit_events.append(AuditEvent.make_audit_event_from_instance(
                 instance,
                 False,
                 True,
