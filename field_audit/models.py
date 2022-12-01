@@ -398,6 +398,30 @@ class AuditEvent(models.Model):
                                           is_create, is_delete, request)
 
     @classmethod
+    def make_audit_event_from_values(cls, old_values, new_values, object_pk,
+                                     object_cls, request):
+        """Factory method for creating a new ``AuditEvent`` based on old and new
+        values.
+
+        :param old_values: {field_name: field_value, ...} representing the
+        values prior to a change
+        :param new_values: {field_name: field_value, ...} representing the
+        values after a change
+        :param object_pk: primary key of the instance
+        :param object_cls: class type of the object being audited
+        :param request: the request object responsible for the change (or
+            ``None`` if there is no request)
+        :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
+            no difference between ``old_values`` and ``new_values``)
+        """
+        is_create = not old_values
+        is_delete = not new_values
+        delta = AuditEvent.create_delta(old_values, new_values)
+        if delta:
+            return AuditEvent.create_audit_event(object_pk, object_cls, delta,
+                                                 is_create, is_delete, request)
+
+    @classmethod
     def create_audit_event(cls, object_pk, object_cls, delta, is_create,
                            is_delete, request):
         from .auditors import audit_dispatcher
@@ -666,13 +690,11 @@ class AuditingQuerySet(models.QuerySet):
             audit_events = []
 
             for pk, old_values_for_pk in old_values.items():
-                delta = AuditEvent.create_delta(old_values_for_pk, new_values)
-                if delta:
-                    audit_event = AuditEvent.create_audit_event(
-                        pk, self.model, delta, False, False, request
-                    )
-                    if audit_event:
-                        audit_events.append(audit_event)
+                audit_event = AuditEvent.make_audit_event_from_values(
+                    old_values_for_pk, new_values, pk, self.model, request
+                )
+                if audit_event:
+                    audit_events.append(audit_event)
             if audit_events:
                 AuditEvent.objects.bulk_create(audit_events)
             return rows
