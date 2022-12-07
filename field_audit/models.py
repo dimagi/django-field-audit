@@ -293,19 +293,79 @@ class AuditEvent(models.Model):
 
     @classmethod
     def audit_field_changes(cls, *args, **kw):
-        """Convenience method that calls ``make_audit_event()`` and saves the
-        event (if one is returned).
+        """Convenience method that calls ``make_audit_event_from_instance()``
+        and saves the event (if one is returned).
 
-        All [keyword] arguments are passed directly to ``make_audit_event()``,
-        see that method for usage.
+        All [keyword] arguments are passed directly to
+        ``make_audit_event_from_instance()``, see that method for usage.
         """
-        event = cls.make_audit_event(*args, **kw)
+        event = cls.make_audit_event_from_instance(*args, **kw)
         if event is not None:
             event.save()
 
     @classmethod
-    def make_audit_event(cls, instance, is_create, is_delete,
-                         request, object_pk=None, init_values=None):
+    def get_delta_from_instance(cls, instance, is_create, is_delete):
+        """
+        Returns a dictionary representing the delta of an instance of a model
+        being audited for changes.
+
+        :param instance: instance of a Model subclass to be audited for changes
+        :param is_create: whether or not the audited event creates a new DB
+            record (setting ``True`` implies that ``instance`` is changing)
+        :param is_delete: whether or not the audited event deletes an existing
+            DB record (setting ``True`` implies that ``instance`` is changing)
+        :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
+        :raises: ``AssertionError`` if both is_create and is_delete are true
+        """
+        assert not (is_create and is_delete),\
+            "is_create and is_delete cannot both be true"
+        fields_to_audit = cls._field_names(instance)
+        # fetch (and reset for next db write operation) initial values
+        old_values = {} if is_create else cls.reset_initial_values(instance)
+        new_values = {} if is_delete else \
+            {f: cls.get_field_value(instance, f) for f in fields_to_audit}
+        return cls.create_delta(old_values, new_values)
+
+    @staticmethod
+    def create_delta(old_values, new_values):
+        """
+        Compares two dictionaries and creates a delta between the two
+
+        :param old_values: {field_name: field_value, ...} representing the
+        values prior to a change
+        :param new_values: {field_name: field_value, ...} representing the
+        values after a change
+        :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
+        :raises: ``AssertionError`` if both old_values and new_values are empty
+        do not match
+        """
+        assert old_values or new_values, \
+            "Must provide a non-empty value for either old_values or new_values"
+
+        changed_fields = old_values.keys() if old_values else new_values.keys()
+        if old_values and new_values:
+            changed_fields = new_values.keys()
+
+        delta = {}
+        for field_name in changed_fields:
+            if not old_values:
+                delta[field_name] = {"new": new_values[field_name]}
+            elif not new_values:
+                delta[field_name] = {"old": old_values[field_name]}
+            else:
+                try:
+                    old_value = old_values[field_name]
+                except KeyError:
+                    delta[field_name] = {"new": new_values[field_name]}
+                else:
+                    if old_value != new_values[field_name]:
+                        delta[field_name] = {"old": old_value,
+                                             "new": new_values[field_name]}
+        return delta
+
+    @classmethod
+    def make_audit_event_from_instance(cls, instance, is_create, is_delete,
+                                       request, object_pk=None):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -320,9 +380,6 @@ class AuditEvent(models.Model):
             ``is_delete == True``, that is, when the instance itself no longer
             references its pre-delete primary key. It is ambiguous to set this
             when ``is_delete == False``, and doing so will raise an exception.
-        :param init_values: (Optional) dictionary of initial values for audited
-            fields on the provided instance. If not provided, will use
-            AuditEvent.ATTACH_INIT_VALUES_AT attribute.
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
@@ -333,37 +390,52 @@ class AuditEvent(models.Model):
                     "'object_pk' arg is ambiguous when 'is_delete == False'"
                 )
             object_pk = instance.pk
-        # fetch (and reset for next db write operation) initial values
-        fields_to_audit = init_values.keys() if init_values else \
-            cls._field_names(instance)
-        init_values = init_values or cls.reset_initial_values(instance)
-        delta = {}
-        for field_name in fields_to_audit:
-            value = cls.get_field_value(instance, field_name)
-            if is_create:
-                delta[field_name] = {"new": value}
-            elif is_delete:
-                delta[field_name] = {"old": value}
-            else:
-                try:
-                    init_value = init_values[field_name]
-                except KeyError:
-                    delta[field_name] = {"new": value}
-                else:
-                    if init_value != value:
-                        delta[field_name] = {"old": init_value, "new": value}
+
+        delta = cls.get_delta_from_instance(instance, is_create, is_delete)
+
         if delta:
-            from .auditors import audit_dispatcher
-            from .field_audit import get_audited_class_path
-            change_context = audit_dispatcher.dispatch(request)
-            return cls(
-                object_class_path=get_audited_class_path(type(instance)),
-                object_pk=object_pk,
-                change_context=cls._change_context_db_value(change_context),
-                is_create=is_create,
-                is_delete=is_delete,
-                delta=delta,
-            )
+            return cls.create_audit_event(object_pk, type(instance), delta,
+                                          is_create, is_delete, request)
+
+    @classmethod
+    def make_audit_event_from_values(cls, old_values, new_values, object_pk,
+                                     object_cls, request):
+        """Factory method for creating a new ``AuditEvent`` based on old and new
+        values.
+
+        :param old_values: {field_name: field_value, ...} representing the
+        values prior to a change
+        :param new_values: {field_name: field_value, ...} representing the
+        values after a change
+        :param object_pk: primary key of the instance
+        :param object_cls: class type of the object being audited
+        :param request: the request object responsible for the change (or
+            ``None`` if there is no request)
+        :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
+            no difference between ``old_values`` and ``new_values``)
+        """
+        is_create = not old_values
+        is_delete = not new_values
+        delta = AuditEvent.create_delta(old_values, new_values)
+        if delta:
+            return AuditEvent.create_audit_event(object_pk, object_cls, delta,
+                                                 is_create, is_delete, request)
+
+    @classmethod
+    def create_audit_event(cls, object_pk, object_cls, delta, is_create,
+                           is_delete, request):
+        from .auditors import audit_dispatcher
+        from .field_audit import get_audited_class_path
+        change_context = audit_dispatcher.dispatch(request)
+        object_cls_path = get_audited_class_path(object_cls)
+        return cls(
+            object_class_path=object_cls_path,
+            object_pk=object_pk,
+            change_context=cls._change_context_db_value(change_context),
+            is_create=is_create,
+            is_delete=is_delete,
+            delta=delta,
+        )
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
@@ -565,8 +637,8 @@ class AuditingQuerySet(models.QuerySet):
         request = request.get()
         audit_events = []
         for instance in self:
-            # make_audit_event() will never return None because delete=True
-            audit_events.append(AuditEvent.make_audit_event(
+            # make_audit_event_from_instance cannot return None when delete=True
+            audit_events.append(AuditEvent.make_audit_event_from_instance(
                 instance,
                 False,
                 True,
@@ -584,10 +656,10 @@ class AuditingQuerySet(models.QuerySet):
     @validate_audit_action
     def update(self, *, audit_action=AuditAction.RAISE, **kw):
         """
-        In order to determine what the old and new values of instances within
-        the queryset, one additional fetch on this queryset is performed,
-        resulting in two fetches of items in the queryset and one bulk creation
-        of audit events
+        In order to determine the old and new values of the records matched by
+        the queryset, a fetch of audited values for the matched records is
+        performed, resulting in one fetch of the current values, one update of
+        the matched records, and one bulk creation of audit events.
         """
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
@@ -602,8 +674,10 @@ class AuditingQuerySet(models.QuerySet):
             # no audited fields are changing
             return super().update(**kw)
 
-        values_to_fetch = fields_to_update | {"pk"}
+        new_values = {field: kw[field] for field in fields_to_audit}
+
         old_values = {}
+        values_to_fetch = fields_to_update | {"pk"}
         for value in self.values(*values_to_fetch):
             pk = value.pop('pk')
             old_values[pk] = value
@@ -614,10 +688,10 @@ class AuditingQuerySet(models.QuerySet):
             from .field_audit import request
             request = request.get()
             audit_events = []
-            for instance in self:
-                init_values = old_values[instance.pk]
-                audit_event = AuditEvent.make_audit_event(
-                    instance, False, False, request, init_values=init_values
+
+            for pk, old_values_for_pk in old_values.items():
+                audit_event = AuditEvent.make_audit_event_from_values(
+                    old_values_for_pk, new_values, pk, self.model, request
                 )
                 if audit_event:
                     audit_events.append(audit_event)

@@ -27,7 +27,10 @@ from field_audit.models import (
     get_manager,
     validate_audit_action,
 )
-from .exceptions import MakeAuditEventException
+from .exceptions import (
+    MakeAuditEventFromInstanceException,
+    MakeAuditEventFromValuesException,
+)
 from .mocks import NoopAtomicTransaction
 
 from .models import (
@@ -674,12 +677,12 @@ class TestAuditEvent(TestCase):
         self.assertAuditTablesEmpty()
 
     @audit_field_names(TestModel, ["value"])
-    def test_make_audit_event_returns_unsaved_event_for_change(self):
+    def test_make_audit_event_from_instance_returns_unsaved_event_for_change(self):  # noqa: E501
         instance = TestModel(id=1)
         AuditEvent.attach_initial_values(instance)
         instance.value = 1
         with override_audited_models({TestModel: "TestModel"}):
-            self.assertIsNotNone(AuditEvent.make_audit_event(
+            self.assertIsNotNone(AuditEvent.make_audit_event_from_instance(
                 instance,
                 False,
                 False,
@@ -688,17 +691,124 @@ class TestAuditEvent(TestCase):
         self.assertAuditTablesEmpty()
 
     @audit_field_names(TestModel, ["value"])
-    def test_make_audit_event_returns_none_for_non_change(self):
+    def test_make_audit_event_from_instance_returns_none_for_non_change(self):
         instance = TestModel(id=1)
         AuditEvent.attach_initial_values(instance)
         with override_audited_models({TestModel: "TestModel"}):
-            self.assertIsNone(AuditEvent.make_audit_event(
+            self.assertIsNone(AuditEvent.make_audit_event_from_instance(
                 instance,
                 False,
                 False,
                 None,
             ))
         self.assertAuditTablesEmpty()
+
+    def test_make_audit_event_from_values_returns_unsaved_event_for_change(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {'f1': 'updated'}, 1, TestModel, None
+            )
+        self.assertIsNotNone(audit_event)
+        self.assertAuditTablesEmpty()
+
+    def test_make_audit_event_from_values_returns_none_for_non_change(self):
+        audit_event = AuditEvent.make_audit_event_from_values(
+            {'f1': 'initial'}, {'f1': 'initial'}, 1, TestModel, None
+        )
+        self.assertIsNone(audit_event)
+        self.assertAuditTablesEmpty()
+
+    def test_make_audit_event_from_values_sets_is_create_to_true_if_no_old_values(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {}, {'f1': 'initial'}, 1, TestModel, None
+            )
+        self.assertTrue(audit_event.is_create)
+        self.assertFalse(audit_event.is_delete)
+
+    def test_make_audit_event_from_values_sets_is_delete_to_true_if_no_new_values(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {}, 1, TestModel, None
+            )
+        self.assertFalse(audit_event.is_create)
+        self.assertTrue(audit_event.is_delete)
+
+    def test_make_audit_event_from_values_sets_both_create_and_delete_to_false_if_change(self):  # noqa: E501
+        with override_audited_models({TestModel: "TestModel"}):
+            audit_event = AuditEvent.make_audit_event_from_values(
+                {'f1': 'initial'}, {'f1': 'updated'}, 1, TestModel, None
+            )
+        self.assertFalse(audit_event.is_create)
+        self.assertFalse(audit_event.is_delete)
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_returns_new_value_for_create(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, True, False)
+        self.assertEqual(delta, {'value': {'new': 1}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_returns_old_value_for_delete(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, False, True)
+        self.assertEqual(delta, {'value': {'old': 1}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_returns_old_and_new_value_for_update(self):
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        instance.value = 2
+        with override_audited_models({TestModel: "TestModel"}):
+            delta = AuditEvent.get_delta_from_instance(instance, False, False)
+        self.assertEqual(delta, {'value': {'old': 1, 'new': 2}})
+
+    @audit_field_names(TestModel, ["value"])
+    def test_get_delta_from_instance_raises_assertion_if_create_and_delete_both_true(self):  # noqa: E501
+        instance = TestModel(id=1, value=1)
+        AuditEvent.attach_initial_values(instance)
+        with (override_audited_models({TestModel: "TestModel"}),
+              self.assertRaises(AssertionError)):
+            AuditEvent.get_delta_from_instance(instance, True, True)
+
+    def test_create_delta_returns_new_when_old_values_is_empty(self):
+        old_values = {}
+        new_values = {'f1': 'initial', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'new': 'initial'}, 'f2': {'new': 0}})
+
+    def test_create_delta_returns_old_when_new_values_is_empty(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial'}, 'f2': {'old': 0}})
+
+    def test_create_delta_returns_old_and_new_when_changes(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {'f1': 'updated', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial', 'new': 'updated'}})
+
+    def test_create_delta_returns_new_when_old_values_missing_field(self):
+        old_values = {'f1': 'initial'}
+        new_values = {'f1': 'updated', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertEqual(delta, {'f1': {'old': 'initial', 'new': 'updated'},
+                                 'f2': {'new': 0}})
+
+    def test_create_delta_returns_empty_when_no_changes(self):
+        old_values = {'f1': 'initial', 'f2': 0}
+        new_values = {'f1': 'initial', 'f2': 0}
+        delta = AuditEvent.create_delta(old_values, new_values)
+        self.assertFalse(delta)
+
+    def test_create_delta_raises_exception_if_old_and_new_values_are_empty(self):  # noqa: E501
+        with self.assertRaises(AssertionError):
+            AuditEvent.create_delta({}, {})
 
     def test__change_context_db_value_returns_empty_dict_for_none(self):
         self.assertEqual({}, AuditEvent._change_context_db_value(None))
@@ -751,9 +861,10 @@ class TestValidateAuditAction(TestCase):
 class TestAuditingModelRollbackBehavior(TestCase):
 
     def test_create_rolls_back_if_audit_event_creation_fails(self):
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             SimpleModel.objects.create(id=0)
 
         with self.assertRaises(SimpleModel.DoesNotExist):
@@ -762,9 +873,10 @@ class TestAuditingModelRollbackBehavior(TestCase):
     def test_delete_rolls_back_if_audit_event_creation_fails(self):
         self.assertEqual(0, AuditEvent.objects.all().count())
         instance = SimpleModel.objects.create(id=0, value='initial')
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.delete()
 
         try:
@@ -776,9 +888,10 @@ class TestAuditingModelRollbackBehavior(TestCase):
         self.assertEqual(0, AuditEvent.objects.all().count())
         instance = SimpleModel.objects.create(id=0, value='initial')
         instance.value = 'updated'
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.save()
 
         refetched_instance = SimpleModel.objects.get(id=0)
@@ -790,11 +903,12 @@ class TestAuditingModelRollbackBehavior(TestCase):
         so we mock that transaction to ensure that the transaction in
         field_audit.py is behaving as expected
         """
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
-              self.assertRaises(MakeAuditEventException)):
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             SimpleModel.objects.get_or_create(id=0)
 
         with self.assertRaises(SimpleModel.DoesNotExist):
@@ -806,11 +920,12 @@ class TestAuditingModelRollbackBehavior(TestCase):
         already, so we mock that transaction to ensure that the transaction in
         field_audit.py is behaving as expected
         """
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
-              self.assertRaises(MakeAuditEventException)):
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             SimpleModel.objects.update_or_create(id=0)
 
         with self.assertRaises(SimpleModel.DoesNotExist):
@@ -871,9 +986,10 @@ class TestAuditingQuerySet(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                side_effect=MakeAuditEventFromInstanceException()),
+              self.assertRaises(MakeAuditEventFromInstanceException)):
             queryset.delete(audit_action=AuditAction.AUDIT)
 
         try:
@@ -987,9 +1103,9 @@ class TestAuditingQuerySet(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.make_audit_event',
-                    side_effect=MakeAuditEventException()),
-              self.assertRaises(MakeAuditEventException)):
+        with (patch('field_audit.models.AuditEvent.make_audit_event_from_values',  # noqa: E501
+                    side_effect=MakeAuditEventFromValuesException()),
+              self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.update(value='updated', audit_action=AuditAction.AUDIT)
 
         instance = ModelWithAuditingManager.objects.get(id=0)
