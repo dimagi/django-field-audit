@@ -636,15 +636,24 @@ class AuditingQuerySet(models.QuerySet):
         from .field_audit import request
         request = request.get()
         audit_events = []
-        for instance in self:
-            # make_audit_event_from_instance cannot return None when delete=True
-            audit_events.append(AuditEvent.make_audit_event_from_instance(
-                instance,
-                False,
-                True,
-                request,
-                instance.pk,
-            ))
+        fields_to_fetch = set(
+            getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT)
+        )
+        fields_to_fetch |= {"pk"}
+        current_values = {}
+        for values_for_instance in self.values(*fields_to_fetch):
+            pk = values_for_instance.pop('pk')
+            current_values[pk] = values_for_instance
+
+        for pk, current_values_for_pk in current_values.items():
+            audit_event = AuditEvent.make_audit_event_from_values(
+                current_values_for_pk,
+                {},
+                pk,
+                self.model,
+                request
+            )
+            audit_events.append(audit_event)
 
         with transaction.atomic(using=self.db):
             value = super().delete()
