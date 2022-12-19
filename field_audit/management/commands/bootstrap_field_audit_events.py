@@ -86,7 +86,7 @@ class Command(BaseCommand):
             stream.write(f"done ({count})")
 
     def do_bootstrap(self, model_class, bootstrap_method, **bootstrap_kw):
-        field_names = self.get_field_names(model_class)
+        field_names = AuditEvent.field_names(model_class)
         if not field_names:
             raise CommandError(
                 f"invalid fields ({field_names!r}) for model: {model_class}"
@@ -102,14 +102,6 @@ class Command(BaseCommand):
         "init": init_all,
         "top-up": top_up_missing,
     }
-
-    @staticmethod
-    def get_field_names(model_class):
-        """Extract the field names from a model class.
-
-        TODO: expose a method on the AuditEvent class for doing this.
-        """
-        return AuditEvent._field_names(model_class())
 
     @contextmanager
     def bootstrap_action_log(self, *args, **kw):
