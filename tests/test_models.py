@@ -987,9 +987,9 @@ class TestAuditingQuerySet(TestCase):
         queryset = ModelWithAuditingManager.objects.all()
 
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
-                side_effect=MakeAuditEventFromInstanceException()),
-              self.assertRaises(MakeAuditEventFromInstanceException)):
+                'field_audit.models.AuditEvent.make_audit_event_from_values',
+                side_effect=MakeAuditEventFromValuesException()),
+              self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.delete(audit_action=AuditAction.AUDIT)
 
         try:

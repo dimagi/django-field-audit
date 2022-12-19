@@ -236,12 +236,12 @@ class AuditEvent(models.Model):
         setattr(model_class, cls.ATTACH_FIELD_NAMES_AT, field_names)
 
     @classmethod
-    def _field_names(cls, instance):
-        """Returns the audit field names stored on the model instance's class
+    def field_names(cls, model_class):
+        """Returns the audit field names stored on the audited Model class
 
-        :param instance: instance of a Model subclass being audited for changes
+        :param model_class: a Django Model class under audit
         """
-        return getattr(instance.__class__, cls.ATTACH_FIELD_NAMES_AT)
+        return getattr(model_class, cls.ATTACH_FIELD_NAMES_AT)
 
     @staticmethod
     def get_field_value(instance, field_name):
@@ -270,7 +270,7 @@ class AuditEvent(models.Model):
                 f"refusing to overwrite {cls.ATTACH_INIT_VALUES_AT!r} "
                 f"on model instance: {instance}"
             )
-        field_names = cls._field_names(instance)
+        field_names = cls.field_names(instance)
         init_values = {f: cls.get_field_value(instance, f) for f in field_names}
         setattr(instance, cls.ATTACH_INIT_VALUES_AT, init_values)
 
@@ -319,7 +319,7 @@ class AuditEvent(models.Model):
         """
         assert not (is_create and is_delete),\
             "is_create and is_delete cannot both be true"
-        fields_to_audit = cls._field_names(instance)
+        fields_to_audit = cls.field_names(instance)
         # fetch (and reset for next db write operation) initial values
         old_values = {} if is_create else cls.reset_initial_values(instance)
         new_values = {} if is_delete else \
@@ -636,15 +636,21 @@ class AuditingQuerySet(models.QuerySet):
         from .field_audit import request
         request = request.get()
         audit_events = []
-        for instance in self:
-            # make_audit_event_from_instance cannot return None when delete=True
-            audit_events.append(AuditEvent.make_audit_event_from_instance(
-                instance,
-                False,
-                True,
-                request,
-                instance.pk,
-            ))
+        fields_to_fetch = set(AuditEvent.field_names(self.model)) | {'pk'}
+        current_values = {}
+        for values_for_instance in self.values(*fields_to_fetch):
+            pk = values_for_instance.pop('pk')
+            current_values[pk] = values_for_instance
+
+        for pk, current_values_for_pk in current_values.items():
+            audit_event = AuditEvent.make_audit_event_from_values(
+                current_values_for_pk,
+                {},
+                pk,
+                self.model,
+                request
+            )
+            audit_events.append(audit_event)
 
         with transaction.atomic(using=self.db):
             value = super().delete()
@@ -666,9 +672,7 @@ class AuditingQuerySet(models.QuerySet):
         assert audit_action is AuditAction.AUDIT, audit_action
 
         fields_to_update = set(kw.keys())
-        audited_fields = set(
-            getattr(self.model, AuditEvent.ATTACH_FIELD_NAMES_AT)
-        )
+        audited_fields = set(AuditEvent.field_names(self.model))
         fields_to_audit = fields_to_update & audited_fields
         if not fields_to_audit:
             # no audited fields are changing
