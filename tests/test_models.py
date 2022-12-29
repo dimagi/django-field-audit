@@ -932,7 +932,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
             SimpleModel.objects.get(id=0)
 
 
-class TestAuditingQuerySet(TestCase):
+class TestAuditingQuerySetBulkCreate(TestCase):
 
     def test_bulk_create_audit_action_audit_is_not_implemented(self):
         queryset = AuditingQuerySet()
@@ -946,6 +946,9 @@ class TestAuditingQuerySet(TestCase):
             queryset.bulk_create(items, audit_action=AuditAction.IGNORE)
             super_meth.assert_called_with(items)
 
+
+class TestAuditingQuerySetBulkUpdate(TestCase):
+
     def test_bulk_update_audit_action_audit_is_not_implemented(self):
         queryset = AuditingQuerySet()
         with self.assertRaises(NotImplementedError):
@@ -958,74 +961,8 @@ class TestAuditingQuerySet(TestCase):
             queryset.bulk_update(items, audit_action=AuditAction.IGNORE)
             super_meth.assert_called_with(items)
 
-    def test_delete_audit_action_audit_deletes_and_creates_audit_events(self):
-        for pkey in range(2):
-            ModelWithAuditingManager.objects.create(
-                id=pkey,
-                value="odd" if pkey % 2 else "even",
-            )
-        queryset = ModelWithAuditingManager.objects.filter(value="even")
-        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
-        queryset.delete(audit_action=AuditAction.AUDIT)
-        instance, = ModelWithAuditingManager.objects.all()
-        self.assertEqual(1, instance.id)
-        self.assertEqual("odd", instance.value)
-        event, = AuditEvent.objects.filter(is_delete=True)
-        self.assertEqual(0, event.object_pk)
-        self.assertEqual(True, event.is_delete)
-        self.assertEqual(
-            "tests.models.ModelWithAuditingManager",
-            event.object_class_path,
-        )
-        self.assertEqual(
-            {"id": {"old": 0}, "value": {"old": "even"}},
-            event.delta,
-        )
 
-    def test_delete_audit_action_audit_rolls_back_if_make_audit_event_fails(self):  # noqa: E501
-        ModelWithAuditingManager.objects.create(id=0, value="initial")
-        queryset = ModelWithAuditingManager.objects.all()
-
-        with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_values',
-                side_effect=MakeAuditEventFromValuesException()),
-              self.assertRaises(MakeAuditEventFromValuesException)):
-            queryset.delete(audit_action=AuditAction.AUDIT)
-
-        try:
-            ModelWithAuditingManager.objects.get(id=0)
-        except ModelWithAuditingManager.DoesNotExist:
-            self.fail(
-                "Expected object with id=0 to exist, but test failed to roll "
-                "back delete operation on ModelWithAuditingManager queryset.")
-
-    def test_delete_audit_action_audit_rolls_back_if_audit_event_save_fails(self):  # noqa: E501
-        ModelWithAuditingManager.objects.create(id=0, value="initial")
-        queryset = ModelWithAuditingManager.objects.all()
-
-        with (patch.object(AuditEvent.objects, 'bulk_create',
-                           side_effect=DatabaseError),
-              self.assertRaises(DatabaseError)):
-            queryset.delete(audit_action=AuditAction.AUDIT)
-
-        try:
-            ModelWithAuditingManager.objects.get(id=0)
-        except ModelWithAuditingManager.DoesNotExist:
-            self.fail(
-                "Expected object with id=0 to exist, but test failed to roll "
-                "back delete operation on ModelWithAuditingManager queryset.")
-
-    def test_delete_audit_action_audit_noop_with_empty_queryset(self):
-        queryset = ModelWithAuditingManager.objects.all()
-        self.assertEqual([], list(queryset))
-        queryset.delete(audit_action=AuditAction.AUDIT)
-        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
-
-    def test_delete_audit_action_ignore_calls_super(self):
-        queryset = AuditingQuerySet()
-        with patch.object(models.QuerySet, "delete") as super_meth:
-            queryset.delete(audit_action=AuditAction.IGNORE)
-            super_meth.assert_called()
+class TestAuditingQuerySetUpdate(TestCase):
 
     def test_update_audit_action_audit_creates_audit_events(self):
         for pkey in range(2):
@@ -1110,6 +1047,78 @@ class TestAuditingQuerySet(TestCase):
 
         instance = ModelWithAuditingManager.objects.get(id=0)
         self.assertEqual("initial", instance.value)
+
+
+class TestAuditingQuerySetDelete(TestCase):
+
+    def test_delete_audit_action_audit_deletes_and_creates_audit_events(self):
+        for pkey in range(2):
+            ModelWithAuditingManager.objects.create(
+                id=pkey,
+                value="odd" if pkey % 2 else "even",
+            )
+        queryset = ModelWithAuditingManager.objects.filter(value="even")
+        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
+        queryset.delete(audit_action=AuditAction.AUDIT)
+        instance, = ModelWithAuditingManager.objects.all()
+        self.assertEqual(1, instance.id)
+        self.assertEqual("odd", instance.value)
+        event, = AuditEvent.objects.filter(is_delete=True)
+        self.assertEqual(0, event.object_pk)
+        self.assertEqual(True, event.is_delete)
+        self.assertEqual(
+            "tests.models.ModelWithAuditingManager",
+            event.object_class_path,
+        )
+        self.assertEqual(
+            {"id": {"old": 0}, "value": {"old": "even"}},
+            event.delta,
+        )
+
+    def test_delete_audit_action_audit_rolls_back_if_make_audit_event_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch(
+                'field_audit.models.AuditEvent.make_audit_event_from_values',
+                side_effect=MakeAuditEventFromValuesException()),
+              self.assertRaises(MakeAuditEventFromValuesException)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
+
+    def test_delete_audit_action_audit_rolls_back_if_audit_event_save_fails(self):  # noqa: E501
+        ModelWithAuditingManager.objects.create(id=0, value="initial")
+        queryset = ModelWithAuditingManager.objects.all()
+
+        with (patch.object(AuditEvent.objects, 'bulk_create',
+                           side_effect=DatabaseError),
+              self.assertRaises(DatabaseError)):
+            queryset.delete(audit_action=AuditAction.AUDIT)
+
+        try:
+            ModelWithAuditingManager.objects.get(id=0)
+        except ModelWithAuditingManager.DoesNotExist:
+            self.fail(
+                "Expected object with id=0 to exist, but test failed to roll "
+                "back delete operation on ModelWithAuditingManager queryset.")
+
+    def test_delete_audit_action_audit_noop_with_empty_queryset(self):
+        queryset = ModelWithAuditingManager.objects.all()
+        self.assertEqual([], list(queryset))
+        queryset.delete(audit_action=AuditAction.AUDIT)
+        self.assertEqual([], list(AuditEvent.objects.filter(is_delete=True)))
+
+    def test_delete_audit_action_ignore_calls_super(self):
+        queryset = AuditingQuerySet()
+        with patch.object(models.QuerySet, "delete") as super_meth:
+            queryset.delete(audit_action=AuditAction.IGNORE)
+            super_meth.assert_called()
 
 
 class TestAuditEventBootstrapping(TestCase):
