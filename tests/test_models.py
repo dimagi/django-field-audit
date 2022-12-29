@@ -934,17 +934,85 @@ class TestAuditingModelRollbackBehavior(TestCase):
 
 class TestAuditingQuerySetBulkCreate(TestCase):
 
-    def test_bulk_create_audit_action_audit_is_not_implemented(self):
-        queryset = AuditingQuerySet()
-        with self.assertRaises(NotImplementedError):
-            queryset.bulk_create([], audit_action=AuditAction.AUDIT)
+    def test_bulk_create_audit_action_audit_creates_audit_events(self):
+        objs = ModelWithAuditingManager.objects.bulk_create([
+            ModelWithAuditingManager(id=1, value='initial1'),
+            ModelWithAuditingManager(id=2, value='initial2')
+        ], audit_action=AuditAction.AUDIT)
 
-    def test_bulk_create_audit_action_ignore_calls_super(self):
-        queryset = AuditingQuerySet()
-        items = object()
-        with patch.object(models.QuerySet, "bulk_create") as super_meth:
-            queryset.bulk_create(items, audit_action=AuditAction.IGNORE)
-            super_meth.assert_called_with(items)
+        self.assertEqual(len(objs), 2)
+        for obj in objs:
+            event, = AuditEvent.objects.filter(object_pk=obj.pk,
+                                               is_create=True,
+                                               is_delete=False)
+            self.assertEqual(
+                "tests.models.ModelWithAuditingManager",
+                event.object_class_path,
+            )
+            self.assertEqual(
+                {"id": {"new": obj.pk}, "value": {"new": obj.value}},
+                event.delta,
+            )
+
+    def test_bulk_create_audit_action_audit_creates_audit_events_with_no_value(self):  # noqa: E501
+        objs = ModelWithAuditingManager.objects.bulk_create([
+            ModelWithAuditingManager(id=1),
+            ModelWithAuditingManager(id=2)
+        ], audit_action=AuditAction.AUDIT)
+
+        for obj in objs:
+            event, = AuditEvent.objects.filter(object_pk=obj.pk,
+                                               is_create=True,
+                                               is_delete=False)
+            self.assertEqual(
+                "tests.models.ModelWithAuditingManager",
+                event.object_class_path,
+            )
+            self.assertEqual(
+                {"id": {"new": obj.pk}, "value": {"new": None}},
+                event.delta,
+            )
+
+    def test_bulk_create_audit_action_ignore_does_not_create_audit_events(self):
+        ModelWithAuditingManager.objects.bulk_create([
+            ModelWithAuditingManager(id=1, value='initial1'),
+            ModelWithAuditingManager(id=2, value='initial2')
+        ], audit_action=AuditAction.IGNORE)
+
+        self.assertEqual(
+            AuditEvent.objects.filter(is_create=True, is_delete=False).count(),
+            0)
+
+    def test_bulk_create_audit_action_raise_raises_exception(self):
+        with self.assertRaises(UnsetAuditActionError):
+            ModelWithAuditingManager.objects.bulk_create([
+                ModelWithAuditingManager(id=1, value='initial1'),
+            ], audit_action=AuditAction.RAISE)
+
+    def test_bulk_create_audit_action_default_raises_exception(self):
+        with self.assertRaises(UnsetAuditActionError):
+            ModelWithAuditingManager.objects.bulk_create([
+                ModelWithAuditingManager(id=1, value='initial1'),
+            ])
+
+    def test_bulk_create_audit_action_audit_rolls_back_if_fails(self):
+        with (patch('field_audit.models.AuditEvent.make_audit_event_from_instance',  # noqa: E501
+                    side_effect=MakeAuditEventFromInstanceException()),
+              self.assertRaises(MakeAuditEventFromInstanceException)):
+            ModelWithAuditingManager.objects.bulk_create([
+                ModelWithAuditingManager(id=1, value='initial1'),
+            ], audit_action=AuditAction.AUDIT)
+
+        with self.assertRaises(ModelWithAuditingManager.DoesNotExist):
+            ModelWithAuditingManager.objects.get(id=1)
+
+    def test_bulk_create_with_no_objects_does_not_create_anything(self):
+        objs = ModelWithAuditingManager.objects.bulk_create(
+            [], audit_action=AuditAction.AUDIT)
+        self.assertFalse(objs)
+        self.assertEqual(
+            AuditEvent.objects.filter(is_create=True, is_delete=False).count(),
+            0)
 
 
 class TestAuditingQuerySetBulkUpdate(TestCase):
