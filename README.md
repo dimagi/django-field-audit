@@ -124,13 +124,13 @@ details:
 - Specifying `audit_special_queryset_writes=True` (step **1** above) without
   setting the default manager to an instance of `AuditingManager` (step **2**
   above) will raise an exception when the model class is evaluated.
-- At this time, only the `QuerySet.delete()` and `QuerySet.update()` "special"
-  write methods can actually perform change auditing when called with 
-  `audit_action=AuditAction.AUDIT`. The other two methods are currently not
-  implemented and will raise `NotImplementedError` if called with that action.
-  Implementing these remaining methods remains a task for the future, see
-  **TODO** below. All four methods do support `audit_action=AuditAction.IGNORE`
-  usage, however.
+- At this time, `QuerySet.delete()`, `QuerySet.update()`,
+  and `QuerySet.bulk_create()` "special" write methods can actually perform
+  change auditing when called with `audit_action=AuditAction.AUDIT`. 
+  `QuerySet.bulk_update()` is not currently implemented and will raise
+  `NotImplementedError` if called with that action. Implementing this remaining
+  method remains a task for the future, see **TODO** below. All four methods do
+  support `audit_action=AuditAction.IGNORE` usage, however.
 - All audited methods use transactions to ensure changes to audited models
   are only committed to the database if audit events are successfully created
   and saved as well.
@@ -252,7 +252,6 @@ twine upload dist/*
 ## TODO
 
 - Implement auditing for the remaining "special" QuerySet write operations:
-  - `bulk_create()`
   - `bulk_update()`
 - Write full library documentation using github.io.
 - Switch to `pytest` to support Python 3.10.
