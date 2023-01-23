@@ -611,7 +611,7 @@ class AuditingQuerySet(models.QuerySet):
     """
 
     @validate_audit_action
-    def bulk_create(self, objs, audit_action=AuditAction.RAISE, **kw):
+    def bulk_create(self, objs, *, audit_action=AuditAction.RAISE, **kw):
         if audit_action is AuditAction.IGNORE or not objs:
             return super().bulk_create(objs, **kw)
         assert audit_action is AuditAction.AUDIT, audit_action
