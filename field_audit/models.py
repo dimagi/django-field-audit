@@ -611,13 +611,23 @@ class AuditingQuerySet(models.QuerySet):
     """
 
     @validate_audit_action
-    def bulk_create(self, *args, audit_action=AuditAction.RAISE, **kw):
-        if audit_action is AuditAction.IGNORE:
-            return super().bulk_create(*args, **kw)
-        else:
-            raise NotImplementedError(
-                "Change auditing is not implemented for bulk_create()."
-            )
+    def bulk_create(self, objs, *, audit_action=AuditAction.RAISE, **kw):
+        if audit_action is AuditAction.IGNORE or not objs:
+            return super().bulk_create(objs, **kw)
+        assert audit_action is AuditAction.AUDIT, audit_action
+
+        from .field_audit import request
+        request = request.get()
+
+        with transaction.atomic(using=self.db):
+            created_objs = super().bulk_create(objs, **kw)
+            audit_events = []
+            for obj in created_objs:
+                audit_events.append(
+                    AuditEvent.make_audit_event_from_instance(
+                        obj, True, False, request))
+            AuditEvent.objects.bulk_create(audit_events)
+            return created_objs
 
     @validate_audit_action
     def bulk_update(self, *args, audit_action=AuditAction.RAISE, **kw):
