@@ -1,5 +1,11 @@
 # Django Field Audit change log
 
+## v1.2.5 - 2023-02-22
+- All audited methods use SQL transactions to ensure changes to audited models
+  are only written to the database if the audit event is successfully written
+- Optimize `QuerySet.delete` to only fetch audited values from database
+- Add support for auditing `QuerySet.bulk_create` method
+
 ## v1.2.4 - 2022-11-22
 - Add support for auditing `QuerySet.update` method
 
