@@ -10,12 +10,12 @@ class TestAuditedDbWrites(TestCase):
 
     def test_model_delete_is_audited(self):
         self.assertNoAuditEvents()
-        instance = SimpleModel.objects.create()
+        instance = SimpleModel.objects.create(id=0, value='test')
         AuditEvent.objects.all().delete()  # delete the create audit event
         instance.delete()
         self.assertAuditEvent(
             is_delete=True,
-            delta={"id": {"old": instance.id}, "value": {"old": None}},
+            delta={"id": {"old": 0}, "value": {"old": 'test'}},
         )
 
     def test_model_delete_with_value_on_save_is_audited(self):
