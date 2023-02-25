@@ -321,7 +321,9 @@ class AuditEvent(models.Model):
             "is_create and is_delete cannot both be true"
         fields_to_audit = cls.field_names(instance)
         # fetch (and reset for next db write operation) initial values
-        old_values = {} if is_create else cls.reset_initial_values(instance)
+        # NOTE: even if is_create is True, we need to call reset_initial_values
+        init_values = cls.reset_initial_values(instance)
+        old_values = {} if is_create else init_values
         new_values = {} if is_delete else \
             {f: cls.get_field_value(instance, f) for f in fields_to_audit}
         return cls.create_delta(old_values, new_values)

@@ -30,6 +30,16 @@ class ModelWithAuditingManager(Model):
     objects = AuditingManager()
 
 
+@audit_fields("id", "value_on_save")
+class ModelWithValueOnSave(Model):
+    id = AutoField(primary_key=True)
+    value_on_save = CharField(max_length=16, null=True)
+
+    def save(self, *args, **kwargs):
+        self.value_on_save = 'override'
+        super().save(*args, **kwargs)
+
+
 @audit_fields("name", "title", "flight_hours")
 class CrewMember(Model):
     id = AutoField(primary_key=True)

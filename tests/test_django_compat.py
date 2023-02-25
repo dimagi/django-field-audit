@@ -3,7 +3,7 @@ from django.test import TestCase
 
 from field_audit.models import AuditEvent
 
-from .models import SimpleModel
+from .models import ModelWithValueOnSave, SimpleModel
 
 
 class TestAuditedDbWrites(TestCase):
@@ -16,6 +16,16 @@ class TestAuditedDbWrites(TestCase):
         self.assertAuditEvent(
             is_delete=True,
             delta={"id": {"old": instance.id}, "value": {"old": None}},
+        )
+
+    def test_model_delete_with_value_on_save_is_audited(self):
+        self.assertNoAuditEvents()
+        instance = ModelWithValueOnSave.objects.create(id=0)
+        AuditEvent.objects.all().delete()  # delete the create audit event
+        instance.delete()
+        self.assertAuditEvent(
+            is_delete=True,
+            delta={'id': {'old': 0}, 'value_on_save': {'old': 'override'}},
         )
 
     def test_model_save_is_audited(self):

@@ -25,6 +25,7 @@ from .models import (
     Flight,
     SimpleModel,
     ModelWithAuditingManager,
+    ModelWithValueOnSave,
     PkAuto,
     PkJson,
 )
@@ -125,6 +126,7 @@ class TestFieldAudit(TestCase):
                 Flight,
                 SimpleModel,
                 ModelWithAuditingManager,
+                ModelWithValueOnSave,
                 PkAuto,
                 PkJson,
             },
