@@ -308,6 +308,8 @@ class AuditEvent(models.Model):
         """
         Returns a dictionary representing the delta of an instance of a model
         being audited for changes.
+        Has the side effect of calling cls.reset_initial_values(instance)
+        which grabs and updates the initial values stored on the instance.
 
         :param instance: instance of a Model subclass to be audited for changes
         :param is_create: whether or not the audited event creates a new DB
@@ -320,8 +322,7 @@ class AuditEvent(models.Model):
         assert not (is_create and is_delete),\
             "is_create and is_delete cannot both be true"
         fields_to_audit = cls.field_names(instance)
-        # fetch (and reset for next db write operation) initial values
-        # NOTE: even if is_create is True, we need to call reset_initial_values
+        # SIDE EFFECT: fetch and reset initial values for next db write
         init_values = cls.reset_initial_values(instance)
         old_values = {} if is_create else init_values
         new_values = {} if is_delete else \
