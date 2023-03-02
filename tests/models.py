@@ -30,13 +30,14 @@ class ModelWithAuditingManager(Model):
     objects = AuditingManager()
 
 
-@audit_fields("id", "value_on_save")
+@audit_fields("id", "save_count")
 class ModelWithValueOnSave(Model):
     id = AutoField(primary_key=True)
-    value_on_save = CharField(max_length=16, null=True)
+    value = CharField(max_length=16, null=True)
+    save_count = IntegerField(default=0)
 
     def save(self, *args, **kwargs):
-        self.value_on_save = 'override'
+        self.save_count += 1
         super().save(*args, **kwargs)
 
 
