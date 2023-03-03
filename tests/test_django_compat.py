@@ -3,19 +3,29 @@ from django.test import TestCase
 
 from field_audit.models import AuditEvent
 
-from .models import SimpleModel
+from .models import ModelWithValueOnSave, SimpleModel
 
 
 class TestAuditedDbWrites(TestCase):
 
     def test_model_delete_is_audited(self):
         self.assertNoAuditEvents()
-        instance = SimpleModel.objects.create()
+        instance = SimpleModel.objects.create(id=0, value='test')
         AuditEvent.objects.all().delete()  # delete the create audit event
         instance.delete()
         self.assertAuditEvent(
             is_delete=True,
-            delta={"id": {"old": instance.id}, "value": {"old": None}},
+            delta={"id": {"old": 0}, "value": {"old": 'test'}},
+        )
+
+    def test_model_delete_with_value_on_save_is_audited(self):
+        self.assertNoAuditEvents()
+        instance = ModelWithValueOnSave.objects.create(id=0)
+        AuditEvent.objects.all().delete()  # delete the create audit event
+        instance.delete()
+        self.assertAuditEvent(
+            is_delete=True,
+            delta={'id': {'old': 0}, 'save_count': {'old': 1}},
         )
 
     def test_model_save_is_audited(self):
@@ -24,6 +34,25 @@ class TestAuditedDbWrites(TestCase):
         self.assertAuditEvent(
             is_create=True,
             delta={"id": {"new": 0}, "value": {"new": None}},
+        )
+
+    def test_model_save_with_value_on_save_is_audited(self):
+        self.assertNoAuditEvents()
+        ModelWithValueOnSave.objects.create(id=0)
+        self.assertAuditEvent(
+            is_create=True,
+            delta={'id': {'new': 0}, 'save_count': {'new': 1}},
+        )
+
+    def test_model_multiple_saves_with_value_on_save_is_audited(self):
+        self.assertNoAuditEvents()
+        instance = ModelWithValueOnSave.objects.create(id=0)
+        AuditEvent.objects.all().delete()  # delete the create audit event
+        instance.value = 'update'
+        instance.save()
+        self.assertAuditEvent(
+            is_create=False,
+            delta={'save_count': {'old': 1, 'new': 2}},
         )
 
     def test_queryset_bulk_create_is_not_audited(self):
