@@ -1,5 +1,9 @@
 # Django Field Audit change log
 
+## v1.2.6 - 2023-03-03
+- Resolve bug with incorrect previous values when updating an audited field in
+  the save method of the object.
+
 ## v1.2.5 - 2023-02-22
 - All audited methods use SQL transactions to ensure changes to audited models
   are only written to the database if the audit event is successfully written
