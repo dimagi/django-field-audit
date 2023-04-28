@@ -25,7 +25,7 @@ class SimpleModel(Model):
 @audit_fields("id", "value", audit_special_queryset_writes=True)
 class ModelWithAuditingManager(Model):
     id = AutoField(primary_key=True)
-    value = CharField(max_length=8, null=True)
+    value = CharField(max_length=16, null=True)
     non_audited_field = CharField(max_length=12, null=True)
     objects = AuditingManager()
 
