@@ -1135,7 +1135,6 @@ class TestAuditingQuerySetUpdate(TestCase):
         instances = ModelWithAuditingManager.objects.all()
         for instance in instances:
             self.assertEqual(f"updated-{instance.id}", instance.value)
-            
             event, = AuditEvent.objects.filter(object_pk=instance.pk,
                                                is_create=False, is_delete=False)
             self.assertEqual(
