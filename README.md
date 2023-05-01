@@ -110,6 +110,11 @@ Auditing for the four "special" QuerySet methods that perform DB writes (labeled
 **No** in the table above) _can_ be enabled. This requires three extra usage
 details:
 
+> **Warning**
+> Enabling auditing on these QuerySet methods might have significant
+> performance implications, especially on large datasets, since audit events are
+> constructed in memory and bulk written to the database.
+
 1. Enable the feature by calling the audit decorator specifying
    `@audit_fields(..., audit_special_queryset_writes=True)`.
 2. Configure the model class so its default manager is an instance of
