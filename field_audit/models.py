@@ -5,6 +5,7 @@ from itertools import islice
 
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import Expression
 
 from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
@@ -679,6 +680,9 @@ class AuditingQuerySet(models.QuerySet):
         the queryset, a fetch of audited values for the matched records is
         performed, resulting in one fetch of the current values, one update of
         the matched records, and one bulk creation of audit events.
+
+        NOTE: if django.db.models.Expressions are provided as update arguments,
+        an additional fetch of records is performed to obtain new values.
         """
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
@@ -692,6 +696,8 @@ class AuditingQuerySet(models.QuerySet):
             return super().update(**kw)
 
         new_values = {field: kw[field] for field in fields_to_audit}
+        uses_expressions = any(
+            [isinstance(val, Expression) for val in new_values.values()])
 
         old_values = {}
         values_to_fetch = fields_to_update | {"pk"}
@@ -701,14 +707,23 @@ class AuditingQuerySet(models.QuerySet):
 
         with transaction.atomic(using=self.db):
             rows = super().update(**kw)
+            if uses_expressions:
+                # fetch updated values to ensure audit event deltas are accurate
+                # after update is performed with expressions
+                new_values = {}
+                for value in self.values(*values_to_fetch):
+                    pk = value.pop('pk')
+                    new_values[pk] = value
+            else:
+                new_values = {pk: new_values for pk in old_values.keys()}
+
             # create and write the audit events _after_ the update succeeds
             from .field_audit import request
             request = request.get()
             audit_events = []
-
             for pk, old_values_for_pk in old_values.items():
                 audit_event = AuditEvent.make_audit_event_from_values(
-                    old_values_for_pk, new_values, pk, self.model, request
+                    old_values_for_pk, new_values[pk], pk, self.model, request
                 )
                 if audit_event:
                     audit_events.append(audit_event)

@@ -6,6 +6,7 @@ from unittest.mock import ANY, Mock, patch
 import django
 from django.conf import settings
 from django.db import connection, models, transaction
+from django.db.models import Case, When, Value
 from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
 
@@ -1115,6 +1116,33 @@ class TestAuditingQuerySetUpdate(TestCase):
 
         instance = ModelWithAuditingManager.objects.get(id=0)
         self.assertEqual("initial", instance.value)
+
+    def test_update_audit_action_audit_with_expressions_succeeds(self):
+        update_kwargs = {}
+        when_statements = []
+        field = ModelWithAuditingManager._meta.get_field('value')
+        for pkey in range(2):
+            obj = ModelWithAuditingManager.objects.create(id=pkey,
+                                                          value="initial")
+            attr = Value(f'updated-{pkey}', output_field=field)
+            when_statements.append(When(pk=obj.pk, then=attr))
+        case_statement = Case(*when_statements, output_field=field)
+        update_kwargs[field.attname] = case_statement
+
+        queryset = ModelWithAuditingManager.objects.all()
+        queryset.update(**dict(update_kwargs, audit_action=AuditAction.AUDIT))
+
+        instances = ModelWithAuditingManager.objects.all()
+        for instance in instances:
+            self.assertEqual(f"updated-{instance.id}", instance.value)
+            event, = AuditEvent.objects.filter(object_pk=instance.pk,
+                                               is_create=False, is_delete=False)
+            self.assertEqual(
+                "tests.models.ModelWithAuditingManager",
+                event.object_class_path)
+            self.assertEqual(
+                {"value": {"old": "initial", "new": f"updated-{instance.id}"}},
+                event.delta)
 
 
 class TestAuditingQuerySetDelete(TestCase):
