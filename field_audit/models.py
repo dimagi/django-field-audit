@@ -320,7 +320,7 @@ class AuditEvent(models.Model):
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both is_create and is_delete are true
         """
-        assert not (is_create and is_delete),\
+        assert not (is_create and is_delete), \
             "is_create and is_delete cannot both be true"
         fields_to_audit = cls.field_names(instance)
         # SIDE EFFECT: fetch and reset initial values for next db write
