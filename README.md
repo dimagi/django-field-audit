@@ -210,7 +210,7 @@ Create/activate a python virtualenv and install the required dependencies.
 ```shell
 cd django-field-audit
 mkvirtualenv django-field-audit  # or however you choose to setup your environment
-pip install django nose flake8 coverage
+pip install django pynose flake8 coverage
 ```
 
 ### Running tests
@@ -221,7 +221,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Tests
   ```shell
-  nosetests
+  pynose 
   ```
 
 - Style check
@@ -231,8 +231,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Coverage
   ```shell
-  coverage run -m nose
-  coverage report -m
+  pynose --with-coverage --cover-erase --cover-package field_audit
   ```
 
 ### Adding migrations

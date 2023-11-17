@@ -17,12 +17,11 @@ jobs:
       run: |
         python --version
         pip install --upgrade pip wheel
-        pip install django nose coverage
+        pip install django pynose coverage
     - name: Run coverage
       run: |
-        coverage run -m nose
         # .coverage.* files are ignored by git
-        coverage report -m | tee .coverage.out
+        pynose --with-coverage --cover-erase --cover-package=field_audit | tee .coverage.out
         percent=$(grep -E '^TOTAL\s.+\s[0-9]{1,3}%$' .coverage.out \
                   | awk '{gsub("%$", "", $NF); print($NF)}')
         python scripts/make-coverage-badge.py -o .coverage.svg "$percent"
