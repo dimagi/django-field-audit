@@ -231,7 +231,8 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Coverage
   ```shell
-  pynose --with-coverage --cover-erase --cover-package field_audit
+  coverage run -m nose
+  coverage report -m
   ```
 
 ### Adding migrations

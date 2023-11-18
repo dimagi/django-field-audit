@@ -20,8 +20,9 @@ jobs:
         pip install django pynose coverage
     - name: Run coverage
       run: |
+        coverage run -m nose
         # .coverage.* files are ignored by git
-        pynose --with-coverage --cover-erase --cover-package=field_audit | tee .coverage.out
+        coverage report -m | tee .coverage.out
         percent=$(grep -E '^TOTAL\s.+\s[0-9]{1,3}%$' .coverage.out \
                   | awk '{gsub("%$", "", $NF); print($NF)}')
         python scripts/make-coverage-badge.py -o .coverage.svg "$percent"

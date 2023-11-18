@@ -59,7 +59,7 @@ jobs:
             "HOST":"localhost",
             "PORT":"5432"
           }
-      run: pynose -v --with-coverage --cover-branches --cover-package=field_audit
+      run: nosetests -v --with-coverage --cover-branches --cover-package=field_audit
       continue-on-error: ${{ matrix.experimental }}
     - name: Check migrations
       run: |
