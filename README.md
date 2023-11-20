@@ -210,7 +210,7 @@ Create/activate a python virtualenv and install the required dependencies.
 ```shell
 cd django-field-audit
 mkvirtualenv django-field-audit  # or however you choose to setup your environment
-pip install django nose flake8 coverage
+pip install django pynose flake8 coverage
 ```
 
 ### Running tests
