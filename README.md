@@ -221,7 +221,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Tests
   ```shell
-  nosetests 
+  nosetests
   ```
 
 - Style check
