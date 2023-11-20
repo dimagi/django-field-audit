@@ -9,6 +9,6 @@ jobs:
   verify-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Verify changelog version
       run: ./scripts/verify-changelog-version.py
