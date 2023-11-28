@@ -17,14 +17,10 @@ class Migration(migrations.Migration):
             model_name='auditevent',
             constraint=models.CheckConstraint(
                 name='field_audit_auditevent_chk_create_or_delete_or_bootstrap',
-                check=models.Q(
-                    models.Q(
-                        models.Q(('is_create', True), ('is_delete', True)),
-                        models.Q(('is_bootstrap', True), ('is_create', True)),
-                        models.Q(('is_bootstrap', True), ('is_delete', True)),
-                        _connector='OR',
-                    ),
-                    _negated=True,
+                check=~(
+                    models.Q(is_create=True, is_delete=True) | \
+                    models.Q(is_create=True, is_bootstrap=True) | \
+                    models.Q(is_delete=True, is_bootstrap=True)  # noqa: E502
                 ),
             ),
         ),
