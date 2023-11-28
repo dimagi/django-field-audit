@@ -216,11 +216,10 @@ class AuditEvent(models.Model):
         constraints = [
             models.CheckConstraint(
                 name="field_audit_auditevent_chk_create_or_delete_or_bootstrap",
-                check=models.Q(
+                check=~(
                     models.Q(is_create=True, is_delete=True) | \
                     models.Q(is_create=True, is_bootstrap=True) | \
-                    models.Q(is_delete=True, is_bootstrap=True),  # noqa: E502
-                    _negated=True
+                    models.Q(is_delete=True, is_bootstrap=True)  # noqa: E502
                 ),
             ),
         ]
