@@ -43,6 +43,9 @@ from .models import (
     PkAuto,
     PkJson,
     SimpleModel,
+    Experiment,
+    Prompt,
+    ConsentForm
 )
 from .test_field_audit import override_audited_models
 
@@ -1216,6 +1219,17 @@ class TestAuditingQuerySetDelete(TestCase):
             queryset.delete(audit_action=AuditAction.IGNORE)
             super_meth.assert_called()
 
+    def test_delete_does_not_cause_recursion_error(self):
+        experiment = Experiment.objects.create(
+            chatbot_prompt=Prompt.objects.create(name="Test"),
+            consent_form=ConsentForm.objects.create(name="Test"),
+        )
+        object_pk = experiment.id
+        experiment.chatbot_prompt.delete()
+        event = AuditEvent.objects.last()
+        assert event.is_delete is True
+        assert event.object_pk == object_pk
+        
 
 class TestAuditEventBootstrapping(TestCase):
 
