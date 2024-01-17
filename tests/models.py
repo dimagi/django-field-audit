@@ -120,15 +120,7 @@ class ExperimentObjectManager(AuditingManager):
     pass
 
 
-class SourceMaterialObjectManager(AuditingManager):
-    pass
-
-
 class SafetyLayerObjectManager(AuditingManager):
-    pass
-
-
-class ConsentFormObjectManager(AuditingManager):
     pass
 
 
@@ -139,28 +131,14 @@ class Prompt(Model):
 
 
 @audit_fields("name", audit_special_queryset_writes=True)
-class SourceMaterial(Model):
-    objects = SourceMaterialObjectManager()
-    name = CharField(max_length=50)
-
-
-@audit_fields("name", audit_special_queryset_writes=True)
 class SafetyLayer(Model):
     objects = SafetyLayerObjectManager()
     name = CharField(max_length=50)
 
 
-@audit_fields("name", audit_special_queryset_writes=True)
-class ConsentForm(Model):
-    objects = ConsentFormObjectManager()
-    name = CharField(max_length=50)
-
-
 @audit_fields(
     "chatbot_prompt",
-    "safety_layers",
     "tools_enabled",
-    "consent_form",
     audit_special_queryset_writes=True
 )
 class Experiment(Model):
@@ -176,8 +154,3 @@ class Experiment(Model):
         blank=True
     )
     tools_enabled = BooleanField(default=False)
-    consent_form = ForeignKey(
-        ConsentForm,
-        on_delete=CASCADE,
-        related_name="experiments"
-    )
