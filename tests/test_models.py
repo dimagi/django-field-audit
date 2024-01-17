@@ -34,7 +34,6 @@ from .exceptions import (
     MakeAuditEventFromValuesException,
 )
 from .mocks import NoopAtomicTransaction
-
 from .models import (
     Aerodrome,
     Aircraft,
@@ -1225,7 +1224,7 @@ class TestAuditingQuerySetDelete(TestCase):
     def test_delete_does_not_cause_recursion_error(self):
         aircraft = Aircraft.objects.create()
         object_pk = aircraft.id
-        aircraft = Aircraft.objects.defer("tail_number", "make_model").get(id=object_pk)
+        aircraft = Aircraft.objects.defer("tail_number", "make_model").get(id=object_pk)  # noqa: E501
         aircraft.delete()
         event = AuditEvent.objects.last()
         assert event.is_delete is True

@@ -10,7 +10,6 @@ from django.db.models import (
     ForeignKey,
     IntegerField,
     JSONField,
-    ManyToManyField
 )
 
 from field_audit import audit_fields

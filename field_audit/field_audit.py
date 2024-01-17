@@ -138,9 +138,9 @@ def _decorate_db_write(func):
 
 
 def _decorate_refresh_from_db(func):
-    """Decorates the "refresh from db" method on Model subclasses. This is necessary to ensure
-    that all audited fields are included in the refresh to avoid recursively calling the refresh
-    for deferred fields.
+    """Decorates the "refresh from db" method on Model subclasses. This is
+    necessary to ensure that all audited fields are included in the refresh
+    to avoid recursively calling the refresh for deferred fields.
 
     :param func: the "refresh from db" method to decorate
     """
