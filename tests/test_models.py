@@ -43,8 +43,6 @@ from .models import (
     PkAuto,
     PkJson,
     SimpleModel,
-    Experiment,
-    Prompt,
 )
 from .test_field_audit import override_audited_models
 
@@ -1219,12 +1217,10 @@ class TestAuditingQuerySetDelete(TestCase):
             super_meth.assert_called()
 
     def test_delete_does_not_cause_recursion_error(self):
-        prompt = Prompt.objects.create(name="Test")
-        experiment = Experiment.objects.create(
-            chatbot_prompt=prompt,
-        )
-        object_pk = experiment.id
-        prompt.delete()
+        aircraft = Aircraft.objects.create()
+        object_pk = aircraft.id
+        aircraft = Aircraft.objects.defer("tail_number", "make_model").get(id=object_pk)
+        aircraft.delete()
         event = AuditEvent.objects.last()
         assert event.is_delete is True
         assert event.object_pk == object_pk
