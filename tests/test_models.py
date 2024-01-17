@@ -4,6 +4,7 @@ from enum import Enum
 from unittest.mock import ANY, Mock, patch
 
 import django
+from django.apps import apps
 from django.conf import settings
 from django.db import connection, models, transaction
 from django.db.models import Case, When, Value
@@ -376,6 +377,11 @@ class TestAuditEvent(TestCase):
                 to_field="tail_number",
             )
 
+        def cleanup_flyby():
+            del apps.all_models["tests"]["flybytailnumber"]
+            apps.clear_cache()
+
+        self.addCleanup(cleanup_flyby)
         flyby = FlyByTailNumber(aircraft=Aircraft(tail_number="CGXII"))
         self.assertEqual("CGXII", AuditEvent.get_field_value(flyby, "aircraft"))
 
@@ -1224,7 +1230,7 @@ class TestAuditingQuerySetDelete(TestCase):
         event = AuditEvent.objects.last()
         assert event.is_delete is True
         assert event.object_pk == object_pk
-        
+
 
 class TestAuditEventBootstrapping(TestCase):
 
