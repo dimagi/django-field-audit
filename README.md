@@ -245,7 +245,8 @@ python example/manage.py makemigrations field_audit
 
 ### Uploading to PyPI
 
-Package and upload the generated files.
+First bump the package version in the `field_audit/__init__.py` file. Then create a changelog entry in the CHANGELOG.md
+file. After these changes are merged, you should tag the main branch with the new version. Then, package and upload the generated files to PyPI.
 
 ```shell
 pip install -r pkg-requires.txt
