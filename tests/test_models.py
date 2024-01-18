@@ -4,6 +4,7 @@ from enum import Enum
 from unittest.mock import ANY, Mock, patch
 
 import django
+from django.apps import apps
 from django.conf import settings
 from django.db import connection, models, transaction
 from django.db.models import Case, When, Value
@@ -33,7 +34,6 @@ from .exceptions import (
     MakeAuditEventFromValuesException,
 )
 from .mocks import NoopAtomicTransaction
-
 from .models import (
     Aerodrome,
     Aircraft,
@@ -376,6 +376,11 @@ class TestAuditEvent(TestCase):
                 to_field="tail_number",
             )
 
+        def cleanup_flyby():
+            del apps.all_models["tests"]["flybytailnumber"]
+            apps.clear_cache()
+
+        self.addCleanup(cleanup_flyby)
         flyby = FlyByTailNumber(aircraft=Aircraft(tail_number="CGXII"))
         self.assertEqual("CGXII", AuditEvent.get_field_value(flyby, "aircraft"))
 
@@ -1215,6 +1220,15 @@ class TestAuditingQuerySetDelete(TestCase):
         with patch.object(models.QuerySet, "delete") as super_meth:
             queryset.delete(audit_action=AuditAction.IGNORE)
             super_meth.assert_called()
+
+    def test_delete_does_not_cause_recursion_error(self):
+        aircraft = Aircraft.objects.create()
+        object_pk = aircraft.id
+        aircraft = Aircraft.objects.defer("tail_number", "make_model").get(id=object_pk)  # noqa: E501
+        aircraft.delete()
+        event = AuditEvent.objects.last()
+        assert event.is_delete is True
+        assert event.object_pk == object_pk
 
 
 class TestAuditEventBootstrapping(TestCase):

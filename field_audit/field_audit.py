@@ -62,6 +62,7 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         cls.__init__ = _decorate_init(cls.__init__)
         cls.save = _decorate_db_write(cls.save)
         cls.delete = _decorate_db_write(cls.delete)
+        cls.refresh_from_db = _decorate_refresh_from_db(cls.refresh_from_db)
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
     if not field_names:
@@ -132,6 +133,23 @@ def _decorate_db_write(func):
     is_delete = func.__name__ == "delete"
     if not is_save and not is_delete:
         raise ValueError(f"invalid function for decoration: {func}")
+    from .models import AuditEvent
+    return wrapper
+
+
+def _decorate_refresh_from_db(func):
+    """Decorates the "refresh from db" method on Model subclasses. This is
+    necessary to ensure that all audited fields are included in the refresh
+    to avoid recursively calling the refresh for deferred fields.
+
+    :param func: the "refresh from db" method to decorate
+    """
+    @wraps(func)
+    def wrapper(self, using=None, fields=None, **kwargs):
+        if fields is not None:
+            fields = set(fields) | set(AuditEvent.field_names(self))
+        func(self, using, fields, **kwargs)
+
     from .models import AuditEvent
     return wrapper
 
