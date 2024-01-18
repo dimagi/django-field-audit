@@ -1,5 +1,8 @@
 # Django Field Audit change log
 
+## v1.2.7 - 2024-01-18
+- Resolve a recursion issue with multiple deferred audit fields.
+
 ## v1.2.6 - 2023-03-03
 - Resolve bug with incorrect previous values when updating an audited field in
   the save method of the object.
