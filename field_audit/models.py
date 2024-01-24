@@ -6,6 +6,7 @@ from itertools import islice
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Expression
+from django.utils import timezone
 
 from .const import BOOTSTRAP_BATCH_SIZE
 from .utils import class_import_helper
@@ -197,7 +198,7 @@ def get_date():
     This is the "getter" for default values of the ``AuditEvent.event_date``
     field.
     """
-    return datetime.utcnow()
+    return timezone.now()
 
 
 class AuditEvent(models.Model):
