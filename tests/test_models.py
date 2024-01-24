@@ -1,5 +1,5 @@
 from contextlib import ContextDecorator
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
 from unittest.mock import ANY, Mock, patch
 
@@ -10,6 +10,7 @@ from django.db import connection, models, transaction
 from django.db.models import Case, When, Value
 from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from field_audit.auditors import audit_dispatcher
 from field_audit.const import BOOTSTRAP_BATCH_SIZE
@@ -295,7 +296,7 @@ class TestGetFuncs(TestCase):
     def test_get_date(self):
         then = get_date()
         self.assertLess(
-            datetime.utcnow() - then,
+            timezone.now() - then,
             timedelta(seconds=1),
         )
 
