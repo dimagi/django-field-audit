@@ -1,5 +1,9 @@
 # Django Field Audit change log
 
+## v1.2.8 - 2024-01-24
+- Use Django's `timezone.now` instead of `datetime.now` to ensure the correct
+  timezone is used when creating audit events.
+
 ## v1.2.7 - 2024-01-18
 - Resolve a recursion issue with multiple deferred audit fields.
 
