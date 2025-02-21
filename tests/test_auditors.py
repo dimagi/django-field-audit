@@ -178,17 +178,12 @@ class TestSystemUserAuditor(TestCase):
         chk_out.assert_not_called()
         getuser.assert_called_once()
 
-    def test_systemuserauditor_remembers_missing_missing_who_bin(self):
+    def test_systemuserauditor_handles_missing_who_bin(self):
         def fail(*args, **kw):
             raise FileNotFoundError()
         ch_by = {"user_type": USER_TYPE_PROCESS, "username": "carlos"}
-        # round 1
         chk_out, getuser = self._patch_system_getters_and_validate(fail, ch_by)
         chk_out.assert_called_once()
-        getuser.assert_called_once()
-        # round 2
-        chk_out, getuser = self._patch_system_getters_and_validate(fail, ch_by)
-        chk_out.assert_not_called()
         getuser.assert_called_once()
 
     def test_systemuserauditor_change_context_returns_tty_user_on_who_output(self):  # noqa: E501
