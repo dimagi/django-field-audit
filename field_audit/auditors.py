@@ -107,7 +107,7 @@ class SystemUserAuditor(BaseAuditor):
             try:
                 # get owner of STDIN file on login sessions (e.g. SSH)
                 output = check_output(["who", "-m"], stderr=DEVNULL)
-            except CalledProcessError:
+            except (FileNotFoundError, CalledProcessError):
                 self.has_who_bin = False
             else:
                 if output:
