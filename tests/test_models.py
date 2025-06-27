@@ -1566,3 +1566,55 @@ class TestAuditEventBootstrapTopUp(TestCase):
         
         self.assertEqual(old_certs, {cert1.id, cert2.id})
         self.assertEqual(new_certs, [])
+        
+    def test_manytomany_field_realtime_auditing_with_add_remove(self):
+        """Test that ManyToManyField changes create audit events immediately via signals."""
+        from .models import CrewMember, Certification
+        
+        # Create certifications and crew member
+        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
+        cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
+        cert3 = Certification.objects.create(name='CPL', certification_type='Commercial')
+        
+        crew_member = CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain',
+            flight_hours=1500.0
+        )
+        
+        # Clear any events from creation
+        initial_events_count = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).count()
+        
+        # Test direct add() operation - should create audit event immediately
+        crew_member.certifications.add(cert1, cert2)
+
+        # Check that an audit event was created immediately (without save())
+        events = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).order_by('event_date')
+        
+        new_events = list(events[initial_events_count:])
+        self.assertGreater(len(new_events), 0, "M2M add() should create audit event immediately")
+        # Check the latest audit event
+        latest_event = new_events[-1]
+        self.assertIn('certifications', latest_event.delta)
+        self.assertEqual(latest_event.delta['certifications']['old'], [])
+        self.assertEqual(set(latest_event.delta['certifications']['new']), {cert1.id, cert2.id})
+        
+        # Test direct remove() operation - should create audit event immediately  
+        current_events_count = events.count()
+        crew_member.certifications.remove(cert1)
+        
+        events = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).order_by('event_date')
+        
+        self.assertGreater(events.count(), current_events_count, "M2M remove() should create audit event immediately")
+        
+        # Check the remove event
+        latest_event = events.last()
+        self.assertIn('certifications', latest_event.delta)
+        self.assertEqual(set(latest_event.delta['certifications']['old']), {cert1.id, cert2.id})
+        self.assertEqual(latest_event.delta['certifications']['new'], [cert2.id])

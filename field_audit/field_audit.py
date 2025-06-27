@@ -2,6 +2,7 @@ import contextvars
 from functools import wraps
 
 from django.db import models, router, transaction
+from django.db.models.signals import m2m_changed
 
 from .utils import get_fqcn
 
@@ -63,6 +64,10 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         cls.save = _decorate_db_write(cls.save)
         cls.delete = _decorate_db_write(cls.delete)
         cls.refresh_from_db = _decorate_refresh_from_db(cls.refresh_from_db)
+        
+        # Register M2M signal handlers for any ManyToManyFields in the audited fields
+        _register_m2m_signals(cls, field_names)
+        
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
     if not field_names:
@@ -152,6 +157,115 @@ def _decorate_refresh_from_db(func):
 
     from .models import AuditEvent
     return wrapper
+
+
+def _register_m2m_signals(cls, field_names):
+    """Register m2m_changed signal handlers for ManyToManyFields in the audited fields.
+    
+    :param cls: The model class being audited
+    :param field_names: List of field names that are being audited
+    """
+    for field_name in field_names:
+        try:
+            field = cls._meta.get_field(field_name)
+            if isinstance(field, models.ManyToManyField):
+                # Connect the signal to the through model of this M2M field
+                m2m_changed.connect(
+                    _m2m_changed_handler,
+                    sender=field.remote_field.through,
+                    weak=False
+                )
+        except Exception:
+            # If field doesn't exist or isn't a M2M field, continue
+            continue
+
+
+def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
+    """Signal handler for m2m_changed to audit ManyToManyField changes in real-time.
+    
+    :param sender: The intermediate model class for the ManyToManyField
+    :param instance: The instance whose many-to-many relation is updated
+    :param action: A string indicating the type of update ('pre_add', 'post_add', etc.)
+    :param pk_set: For add/remove actions, this is a set of primary key values
+    :param model: The class of the objects that are added to, removed from or cleared
+    """
+    from .models import AuditEvent
+    from .auditors import audit_dispatcher
+    
+    # Only handle post_* actions to avoid duplicate events
+    if action not in ('post_add', 'post_remove', 'post_clear'):
+        return
+        
+    # Check if this instance's class is audited
+    if type(instance) not in _audited_models:
+        return
+        
+    # Find which M2M field this change relates to
+    m2m_field = None
+    field_name = None
+    for field in instance._meta.get_fields():
+        if (isinstance(field, models.ManyToManyField) and 
+            hasattr(field, 'remote_field') and
+            field.remote_field.through == sender):
+            m2m_field = field
+            field_name = field.name
+            break
+    
+    if not m2m_field or field_name not in AuditEvent.field_names(instance):
+        return
+        
+    # Get current M2M values after the change
+    try:
+        current_values = list(getattr(instance, field_name).values_list('pk', flat=True))
+    except Exception:
+        # If we can't get current values, skip auditing
+        return
+        
+    # Calculate old values based on action and pk_set
+    if action == 'post_add':
+        # Current values = old values + added values
+        old_values = [pk for pk in current_values if pk not in (pk_set or set())]
+    elif action == 'post_remove':
+        # Current values = old values - removed values
+        old_values = current_values + list(pk_set or [])
+    elif action == 'post_clear':
+        # For post_clear, current values should be empty, but we can't reconstruct old values
+        # We'll skip creating an audit event for clear operations when using signals
+        # Users should call save() after clear() if they want it audited
+        return
+    else:
+        return
+        
+    # Don't create audit event if no actual change occurred
+    if set(old_values) == set(current_values):
+        return
+        
+    # Create audit event
+    try:
+        req = request.get()
+        change_context = audit_dispatcher.dispatch(req)
+        object_class_path = get_audited_class_path(type(instance))
+        
+        delta = {
+            field_name: {
+                'old': sorted(old_values),
+                'new': sorted(current_values)
+            }
+        }
+        
+        event = AuditEvent(
+            object_class_path=object_class_path,
+            object_pk=instance.pk,
+            change_context=AuditEvent._change_context_db_value(change_context),
+            is_create=False,
+            is_delete=False,
+            delta=delta,
+        )
+        event.save()
+    except Exception:
+        # If audit event creation fails, don't break the M2M operation
+        # This follows the same pattern as the existing audit system
+        pass
 
 
 def get_audited_models():
