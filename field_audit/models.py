@@ -252,6 +252,18 @@ class AuditEvent(models.Model):
         :param field_name: name of a field on ``instance``
         """
         field = instance._meta.get_field(field_name)
+        
+        # Handle ManyToManyField specially to make it JSON serializable
+        if isinstance(field, models.ManyToManyField):
+            # ManyToManyField cannot be accessed on unsaved instances
+            if instance.pk is None:
+                # Instance is not saved, return empty list
+                return []
+            else:
+                # Instance is saved, we can access the related objects
+                related_manager = getattr(instance, field_name)
+                return list(related_manager.values_list('pk', flat=True))
+        
         return field.to_python(field.value_from_object(instance))
 
     @classmethod

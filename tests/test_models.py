@@ -1465,11 +1465,104 @@ class TestAuditEventBootstrapTopUp(TestCase):
         self.assertIn('name', delta)
         self.assertIn('title', delta)
         self.assertIn('flight_hours', delta)
+        self.assertEqual(delta['certifications']['new'], [])
 
-        # Test ManyToMany field handling - it should be present in audited fields
-        if 'certifications' in delta:
-            # If M2M is supported, verify the structure
-            self.assertIn('new', delta['certifications'])
-        else:
-            # If M2M is not supported, this test documents the current behavior
-            self.assertNotIn('certifications', delta)
+        update_event = events.filter(is_create=False).first()
+        self.assertIsNotNone(update_event)
+        delta = update_event.delta
+        self.assertIn('certifications', delta)
+        self.assertEqual(set(delta['certifications']['new']), {cert1.id, cert2.id})
+        self.assertEqual(delta['certifications']['old'], [])
+        
+    def test_manytomany_field_modification_auditing(self):
+        """Test that ManyToManyField changes are properly audited."""
+        from .models import CrewMember, Certification
+        
+        # Create certifications
+        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
+        cert2 = Certification.objects.create(name='IR', certification_type='Instrument') 
+        cert3 = Certification.objects.create(name='CPL', certification_type='Commercial')
+        
+        # Create crew member with initial certifications
+        crew_member = CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain',
+            flight_hours=1500.0
+        )
+        crew_member.certifications.set([cert1, cert2])
+        crew_member.save()
+        
+        # Clear existing events to focus on the next change
+        initial_events_count = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).count()
+        
+        # Modify certifications (remove cert2, add cert3)
+        crew_member.certifications.set([cert1, cert3])
+        crew_member.save()
+        
+        # Check the new audit event
+        events = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).order_by('event_date')
+        
+        self.assertGreater(events.count(), initial_events_count)
+        
+        # Get the latest update event
+        latest_event = events.filter(is_create=False, is_delete=False).last()
+        self.assertIsNotNone(latest_event)
+        
+        delta = latest_event.delta
+        self.assertIn('certifications', delta)
+        
+        # Verify the old and new values
+        old_certs = set(delta['certifications']['old'])
+        new_certs = set(delta['certifications']['new'])
+        
+        self.assertEqual(old_certs, {cert1.id, cert2.id})
+        self.assertEqual(new_certs, {cert1.id, cert3.id})
+        
+    def test_manytomany_field_clear_auditing(self):
+        """Test that clearing ManyToManyField is properly audited."""
+        from .models import CrewMember, Certification
+        
+        # Create certifications and crew member
+        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
+        cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
+        
+        crew_member = CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain',
+            flight_hours=1500.0
+        )
+        crew_member.certifications.set([cert1, cert2])
+        crew_member.save()
+        
+        initial_events_count = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).count()
+        
+        # Clear all certifications
+        crew_member.certifications.clear()
+        crew_member.save()
+        
+        # Check the audit event for clearing
+        events = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).order_by('event_date')
+        
+        self.assertGreater(events.count(), initial_events_count)
+        
+        # Get the latest update event
+        latest_event = events.filter(is_create=False, is_delete=False).last()
+        self.assertIsNotNone(latest_event)
+        
+        delta = latest_event.delta
+        self.assertIn('certifications', delta)
+        
+        # Verify the change from populated to empty
+        old_certs = set(delta['certifications']['old'])
+        new_certs = delta['certifications']['new']
+        
+        self.assertEqual(old_certs, {cert1.id, cert2.id})
+        self.assertEqual(new_certs, [])
