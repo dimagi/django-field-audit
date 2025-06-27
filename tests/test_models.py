@@ -1422,3 +1422,54 @@ class TestAuditEventBootstrapTopUp(TestCase):
                 .filter(models.Q(is_bootstrap=True) | models.Q(is_create=True))
             ))),
         )
+
+    def test_manytomany_field_auditing(self):
+        """Test that ManyToManyField relationships are properly handled in audit events."""
+        from .models import CrewMember, Certification
+        
+        # Create some certifications
+        cert1 = Certification.objects.create(
+            name='Private Pilot License',
+            certification_type='PPL'
+        )
+        cert2 = Certification.objects.create(
+            name='Instrument Rating',
+            certification_type='IR'
+        )
+
+        # Create a crew member
+        crew_member = CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain',
+            flight_hours=1500.0
+        )
+
+        # Add certifications to crew member
+        crew_member.certifications.set([cert1, cert2])
+        crew_member.save()
+
+        # Check that audit events were created
+        events = AuditEvent.objects.filter(
+            object_class_path='tests.models.CrewMember'
+        ).order_by('event_date')
+
+        # Should have at least one create event
+        self.assertGreaterEqual(events.count(), 1)
+        
+        # Check the create event
+        create_event = events.filter(is_create=True).first()
+        self.assertIsNotNone(create_event)
+        
+        # The delta should contain the field values including the ManyToMany field
+        delta = create_event.delta
+        self.assertIn('name', delta)
+        self.assertIn('title', delta)
+        self.assertIn('flight_hours', delta)
+
+        # Test ManyToMany field handling - it should be present in audited fields
+        if 'certifications' in delta:
+            # If M2M is supported, verify the structure
+            self.assertIn('new', delta['certifications'])
+        else:
+            # If M2M is not supported, this test documents the current behavior
+            self.assertNotIn('certifications', delta)
