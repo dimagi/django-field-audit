@@ -3,6 +3,7 @@ from functools import wraps
 from itertools import islice
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.db.models import Expression
 from django.utils import timezone
@@ -203,12 +204,12 @@ def get_date():
 class AuditEvent(models.Model):
     event_date = models.DateTimeField(default=get_date, db_index=True)
     object_class_path = models.CharField(db_index=True, max_length=255)
-    object_pk = models.JSONField()
-    change_context = models.JSONField()
+    object_pk = models.JSONField(encoder=DjangoJSONEncoder)
+    change_context = models.JSONField(encoder=DjangoJSONEncoder)
     is_create = models.BooleanField(default=False)
     is_delete = models.BooleanField(default=False)
     is_bootstrap = models.BooleanField(default=False)
-    delta = models.JSONField()
+    delta = models.JSONField(encoder=DjangoJSONEncoder)
 
     objects = get_manager("AUDITEVENT_MANAGER", DefaultAuditEventManager)
 

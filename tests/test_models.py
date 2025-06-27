@@ -398,6 +398,31 @@ class TestAuditEvent(TestCase):
         capt = CrewMember(title=CleverTitle("Captain"))
         self.assertEqual("Captain", AuditEvent.get_field_value(capt, "title"))
 
+    def test_decimal_field_serialization(self):
+        """Test that DecimalField values are properly handled in audit events."""
+        from decimal import Decimal
+        
+        # Create a CrewMember with a decimal field
+        CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain', 
+            flight_hours=Decimal('1234.5678')
+        )
+        
+        # Check that the audit event was created successfully
+        events = AuditEvent.objects.filter(object_class_path='tests.models.CrewMember')
+        self.assertEqual(events.count(), 1)
+        
+        event = events.first()
+        
+        # The decimal value should be serialized as a string in the delta
+        flight_hours_new = event.delta["flight_hours"]["new"]
+        self.assertIsInstance(flight_hours_new, str)
+        self.assertEqual(flight_hours_new, '1234.5678')
+        
+        # Verify the string can be converted back to Decimal
+        self.assertEqual(Decimal(flight_hours_new), Decimal('1234.5678'))
+
     def test_event_date_default(self):
         event = AuditEvent.objects.create(**EVENT_REQ_FIELDS)
         self.assertLess(
