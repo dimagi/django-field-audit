@@ -191,12 +191,10 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
     """
     from .models import AuditEvent
     from .auditors import audit_dispatcher
-    
-    # Only handle post_* actions to avoid duplicate events
-    if action not in ('post_add', 'post_remove', 'post_clear'):
+
+    if action not in ('post_add', 'post_remove', 'post_clear', 'pre_clear'):
         return
         
-    # Check if this instance's class is audited
     if type(instance) not in _audited_models:
         return
         
@@ -204,68 +202,42 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
     m2m_field = None
     field_name = None
     for field in instance._meta.get_fields():
-        if (isinstance(field, models.ManyToManyField) and 
+        if (
+            isinstance(field, models.ManyToManyField) and
             hasattr(field, 'remote_field') and
-            field.remote_field.through == sender):
+            field.remote_field.through == sender
+        ):
             m2m_field = field
             field_name = field.name
             break
     
     if not m2m_field or field_name not in AuditEvent.field_names(instance):
         return
-        
-    # Get current M2M values after the change
-    try:
-        current_values = list(getattr(instance, field_name).values_list('pk', flat=True))
-    except Exception:
-        # If we can't get current values, skip auditing
+
+    if action == 'pre_clear':
+        # `pk_set` is not supplied for clear actions. so we need to determine the initial
+        # values in the `pre_clear` event
+        AuditEvent.attach_initial_m2m_values(instance, field_name)
         return
-        
-    # Calculate old values based on action and pk_set
-    if action == 'post_add':
-        # Current values = old values + added values
-        old_values = [pk for pk in current_values if pk not in (pk_set or set())]
-    elif action == 'post_remove':
-        # Current values = old values - removed values
-        old_values = current_values + list(pk_set or [])
-    elif action == 'post_clear':
-        # For post_clear, current values should be empty, but we can't reconstruct old values
-        # We'll skip creating an audit event for clear operations when using signals
-        # Users should call save() after clear() if they want it audited
-        return
+
+    if action == 'post_clear':
+        initial_values = AuditEvent.get_initial_m2m_values(instance, field_name)
+        if not initial_values:
+            return
+        delta = {field_name: {'removed': initial_values}}
     else:
-        return
+        if not pk_set:
+            # the change was a no-op
+            return
+        delta_key = 'add' if action == 'post_add' else 'remove'
+        delta = {field_name: {delta_key: list(pk_set)}}
         
-    # Don't create audit event if no actual change occurred
-    if set(old_values) == set(current_values):
-        return
-        
-    # Create audit event
-    try:
-        req = request.get()
-        change_context = audit_dispatcher.dispatch(req)
-        object_class_path = get_audited_class_path(type(instance))
-        
-        delta = {
-            field_name: {
-                'old': sorted(old_values),
-                'new': sorted(current_values)
-            }
-        }
-        
-        event = AuditEvent(
-            object_class_path=object_class_path,
-            object_pk=instance.pk,
-            change_context=AuditEvent._change_context_db_value(change_context),
-            is_create=False,
-            is_delete=False,
-            delta=delta,
-        )
+    req = request.get()
+    event = AuditEvent.create_audit_event(instance.pk, model, delta, False, False, req)
+    if event is not None:
         event.save()
-    except Exception:
-        # If audit event creation fails, don't break the M2M operation
-        # This follows the same pattern as the existing audit system
-        pass
+
+    AuditEvent.clear_initial_m2m_field_values(instance, field_name)
 
 
 def get_audited_models():

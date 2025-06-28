@@ -1446,7 +1446,6 @@ class TestAuditEventBootstrapTopUp(TestCase):
 
         # Add certifications to crew member
         crew_member.certifications.set([cert1, cert2])
-        crew_member.save()
 
         # Check that audit events were created
         events = AuditEvent.objects.filter(
@@ -1470,10 +1469,8 @@ class TestAuditEventBootstrapTopUp(TestCase):
         update_event = events.filter(is_create=False).first()
         self.assertIsNotNone(update_event)
         delta = update_event.delta
-        self.assertIn('certifications', delta)
-        self.assertEqual(set(delta['certifications']['new']), {cert1.id, cert2.id})
-        self.assertEqual(delta['certifications']['old'], [])
-        
+        self.assertEqual(set(delta['certifications']['add']), {cert1.id, cert2.id})
+
     def test_manytomany_field_modification_auditing(self):
         """Test that ManyToManyField changes are properly audited."""
         from .models import CrewMember, Certification
@@ -1490,38 +1487,26 @@ class TestAuditEventBootstrapTopUp(TestCase):
             flight_hours=1500.0
         )
         crew_member.certifications.set([cert1, cert2])
-        crew_member.save()
-        
-        # Clear existing events to focus on the next change
-        initial_events_count = AuditEvent.objects.filter(
-            object_class_path='tests.models.CrewMember'
-        ).count()
-        
+
         # Modify certifications (remove cert2, add cert3)
         crew_member.certifications.set([cert1, cert3])
-        crew_member.save()
-        
+
         # Check the new audit event
         events = AuditEvent.objects.filter(
             object_class_path='tests.models.CrewMember'
         ).order_by('event_date')
         
-        self.assertGreater(events.count(), initial_events_count)
-        
-        # Get the latest update event
-        latest_event = events.filter(is_create=False, is_delete=False).last()
-        self.assertIsNotNone(latest_event)
-        
-        delta = latest_event.delta
-        self.assertIn('certifications', delta)
-        
-        # Verify the old and new values
-        old_certs = set(delta['certifications']['old'])
-        new_certs = set(delta['certifications']['new'])
-        
-        self.assertEqual(old_certs, {cert1.id, cert2.id})
-        self.assertEqual(new_certs, {cert1.id, cert3.id})
-        
+        latest_events = events.filter(is_create=False, is_delete=False).order_by('event_date')
+        self.assertEqual(latest_events.count(), 3)
+        certification_deltas = [
+            event.delta['certifications'] for event in latest_events
+        ]
+        self.assertEqual(certification_deltas, [
+            {'add': [1, 2]},
+            {'remove': [2]},
+            {'add': [3]},
+        ])
+
     def test_manytomany_field_clear_auditing(self):
         """Test that clearing ManyToManyField is properly audited."""
         from .models import CrewMember, Certification
@@ -1536,16 +1521,14 @@ class TestAuditEventBootstrapTopUp(TestCase):
             flight_hours=1500.0
         )
         crew_member.certifications.set([cert1, cert2])
-        crew_member.save()
-        
+
         initial_events_count = AuditEvent.objects.filter(
             object_class_path='tests.models.CrewMember'
         ).count()
         
         # Clear all certifications
         crew_member.certifications.clear()
-        crew_member.save()
-        
+
         # Check the audit event for clearing
         events = AuditEvent.objects.filter(
             object_class_path='tests.models.CrewMember'
@@ -1558,15 +1541,8 @@ class TestAuditEventBootstrapTopUp(TestCase):
         self.assertIsNotNone(latest_event)
         
         delta = latest_event.delta
-        self.assertIn('certifications', delta)
-        
-        # Verify the change from populated to empty
-        old_certs = set(delta['certifications']['old'])
-        new_certs = delta['certifications']['new']
-        
-        self.assertEqual(old_certs, {cert1.id, cert2.id})
-        self.assertEqual(new_certs, [])
-        
+        self.assertEqual(set(delta['certifications']['removed']), {cert1.id, cert2.id})
+
     def test_manytomany_field_realtime_auditing_with_add_remove(self):
         """Test that ManyToManyField changes create audit events immediately via signals."""
         from .models import CrewMember, Certification
@@ -1600,8 +1576,7 @@ class TestAuditEventBootstrapTopUp(TestCase):
         # Check the latest audit event
         latest_event = new_events[-1]
         self.assertIn('certifications', latest_event.delta)
-        self.assertEqual(latest_event.delta['certifications']['old'], [])
-        self.assertEqual(set(latest_event.delta['certifications']['new']), {cert1.id, cert2.id})
+        self.assertEqual(set(latest_event.delta['certifications']['add']), {cert1.id, cert2.id})
         
         # Test direct remove() operation - should create audit event immediately  
         current_events_count = events.count()
@@ -1616,5 +1591,4 @@ class TestAuditEventBootstrapTopUp(TestCase):
         # Check the remove event
         latest_event = events.last()
         self.assertIn('certifications', latest_event.delta)
-        self.assertEqual(set(latest_event.delta['certifications']['old']), {cert1.id, cert2.id})
-        self.assertEqual(latest_event.delta['certifications']['new'], [cert2.id])
+        self.assertEqual(set(latest_event.delta['certifications']['remove']), {cert1.id})

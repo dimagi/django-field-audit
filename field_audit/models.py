@@ -226,6 +226,7 @@ class AuditEvent(models.Model):
 
     ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
     ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
+    ATTACH_INIT_M2M_VALUES_AT = "__field_audit_init_m2m_values"
 
     @classmethod
     def attach_field_names(cls, model_class, field_names):
@@ -253,16 +254,9 @@ class AuditEvent(models.Model):
         """
         field = instance._meta.get_field(field_name)
         
-        # Handle ManyToManyField specially to make it JSON serializable
         if isinstance(field, models.ManyToManyField):
-            # ManyToManyField cannot be accessed on unsaved instances
-            if instance.pk is None:
-                # Instance is not saved, return empty list
-                return []
-            else:
-                # Instance is saved, we can access the related objects
-                related_manager = getattr(instance, field_name)
-                return list(related_manager.values_list('pk', flat=True))
+            # ManyToManyField handled by Django signals
+            return []
         
         return field.to_python(field.value_from_object(instance))
 
@@ -286,6 +280,38 @@ class AuditEvent(models.Model):
         field_names = cls.field_names(instance)
         init_values = {f: cls.get_field_value(instance, f) for f in field_names}
         setattr(instance, cls.ATTACH_INIT_VALUES_AT, init_values)
+
+    @classmethod
+    def attach_initial_m2m_values(cls, instance, field_name):
+        field = instance._meta.get_field(field_name)
+        if not isinstance(field, models.ManyToManyField):
+            return None
+
+        values = cls.get_m2m_field_value(instance, field_name)
+        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        init_values.update({field_name: values})
+        setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
+
+    @classmethod
+    def get_initial_m2m_values(cls, instance, field_name):
+        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        return init_values.get(field_name)
+
+    @classmethod
+    def clear_initial_m2m_field_values(cls, instance, field_name):
+        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        init_values.pop(field_name, None)
+        setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
+
+    @classmethod
+    def get_m2m_field_value(cls, instance, field_name):
+        if instance.pk is None:
+            # Instance is not saved, return empty list
+            return []
+        else:
+            # Instance is saved, we can access the related objects
+            related_manager = getattr(instance, field_name)
+            return list(related_manager.values_list('pk', flat=True))
 
     @classmethod
     def reset_initial_values(cls, instance):
@@ -408,7 +434,6 @@ class AuditEvent(models.Model):
             object_pk = instance.pk
 
         delta = cls.get_delta_from_instance(instance, is_create, is_delete)
-
         if delta:
             return cls.create_audit_event(object_pk, type(instance), delta,
                                           is_create, is_delete, request)
