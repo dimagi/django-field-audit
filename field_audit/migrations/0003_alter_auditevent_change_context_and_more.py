@@ -14,16 +14,19 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='auditevent',
             name='change_context',
-            field=models.JSONField(encoder=django.core.serializers.json.DjangoJSONEncoder),
+            field=models.JSONField(
+                encoder=django.core.serializers.json.DjangoJSONEncoder),
         ),
         migrations.AlterField(
             model_name='auditevent',
             name='delta',
-            field=models.JSONField(encoder=django.core.serializers.json.DjangoJSONEncoder),
+            field=models.JSONField(
+                encoder=django.core.serializers.json.DjangoJSONEncoder),
         ),
         migrations.AlterField(
             model_name='auditevent',
             name='object_pk',
-            field=models.JSONField(encoder=django.core.serializers.json.DjangoJSONEncoder),
+            field=models.JSONField(
+                encoder=django.core.serializers.json.DjangoJSONEncoder),
         ),
     ]
