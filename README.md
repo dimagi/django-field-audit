@@ -140,6 +140,44 @@ details:
   are only committed to the database if audit events are successfully created
   and saved as well.
 
+### Auditing Many-to-Many fields
+
+Many-to-Many field changes are automatically audited through Django signals when
+included in the `@audit_fields` decorator. Changes to M2M relationships generate
+audit events immediately without requiring `save()` calls.
+
+```python
+# Example model with audited M2M field
+@audit_fields("name", "title", "certifications")
+class CrewMember(models.Model):
+    name = models.CharField(max_length=256)
+    title = models.CharField(max_length=64)
+    certifications = models.ManyToManyField('Certification', blank=True)
+```
+
+#### Supported M2M operations
+
+All standard M2M operations create audit events:
+
+```python
+crew_member = CrewMember.objects.create(name='Test Pilot', title='Captain')
+cert1 = Certification.objects.create(name='PPL', certification_type='Private')
+
+crew_member.certifications.add(cert1)         # Creates audit event
+crew_member.certifications.remove(cert1)      # Creates audit event
+crew_member.certifications.set([cert1])       # Creates audit event
+crew_member.certifications.clear()            # Creates audit event
+```
+
+#### M2M audit event structure
+
+M2M changes use specific delta structures in audit events:
+
+- **Add**: `{'certifications': {'add': [1, 2]}}`
+- **Remove**: `{'certifications': {'remove': [2]}}`
+- **Clear**: `{'certifications': {'removed': [1, 2]}}`
+- **Create** / **Bootstrap**: `{'certifications': {'new': []}}`
+
 #### Bootstrap events for models with existing records
 
 In the scenario where auditing is enabled for a model with existing data, it can
