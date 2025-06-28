@@ -246,7 +246,7 @@ class AuditEvent(models.Model):
         return getattr(model_class, cls.ATTACH_FIELD_NAMES_AT)
 
     @staticmethod
-    def get_field_value(instance, field_name):
+    def get_field_value(instance, field_name, bootstrap=False):
         """Returns the database value of a field on ``instance``.
 
         :param instance: an instance of a Django model
@@ -256,6 +256,8 @@ class AuditEvent(models.Model):
         
         if isinstance(field, models.ManyToManyField):
             # ManyToManyField handled by Django signals
+            if bootstrap:
+                return AuditEvent.get_m2m_field_value(instance, field_name)
             return []
         
         return field.to_python(field.value_from_object(instance))
@@ -508,7 +510,7 @@ class AuditEvent(models.Model):
             for instance in iter_records():
                 delta = {}
                 for field_name in field_names:
-                    value = cls.get_field_value(instance, field_name)
+                    value = cls.get_field_value(instance, field_name, bootstrap=True)
                     delta[field_name] = {"new": value}
                 yield cls(
                     object_class_path=object_class_path,

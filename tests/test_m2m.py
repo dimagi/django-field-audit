@@ -1,4 +1,8 @@
+from unittest.mock import ANY, patch
+
 from django.test import TestCase
+
+from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.models import AuditEvent
 
 
@@ -147,3 +151,35 @@ class TestAuditEventM2M(TestCase):
         latest_event = events.last()
         self.assertIn('certifications', latest_event.delta)
         self.assertEqual(set(latest_event.delta['certifications']['remove']), {cert1.id})
+
+
+class TestAuditEventBootstrappingM2M(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from tests.models import Certification, CrewMember
+        cls.cert1 = Certification.objects.create(name='PPL', certification_type='Private')
+        cls.cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
+
+        crew_member = CrewMember.objects.create(
+            name='Test Pilot',
+            title='Captain',
+            flight_hours=1500.0
+        )
+        crew_member.certifications.set([cls.cert1, cls.cert2])
+
+    def test_bootstrap_existing_model_records_m2m(self):
+        from tests.models import CrewMember
+        self.assertEqual([], list(AuditEvent.objects.filter(is_bootstrap=True)))
+        with patch.object(AuditEvent.objects, "bulk_create",
+                          side_effect=AuditEvent.objects.bulk_create) as mock:
+            created_count = AuditEvent.bootstrap_existing_model_records(
+                CrewMember,
+                ['certifications'],
+            )
+            mock.assert_called_once_with(ANY, batch_size=BOOTSTRAP_BATCH_SIZE)
+        bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
+        self.assertEqual(len(bootstrap_events), created_count)
+        event = bootstrap_events[0]
+        self.assertEqual(set(event.delta['certifications']['new']), {self.cert1.id, self.cert2.id})
