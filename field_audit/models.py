@@ -253,13 +253,12 @@ class AuditEvent(models.Model):
         :param field_name: name of a field on ``instance``
         """
         field = instance._meta.get_field(field_name)
-        
+
         if isinstance(field, models.ManyToManyField):
             # ManyToManyField handled by Django signals
             if bootstrap:
                 return AuditEvent.get_m2m_field_value(instance, field_name)
             return []
-        
         return field.to_python(field.value_from_object(instance))
 
     @classmethod
@@ -290,18 +289,24 @@ class AuditEvent(models.Model):
             return None
 
         values = cls.get_m2m_field_value(instance, field_name)
-        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        init_values = getattr(
+            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
+        ) or {}
         init_values.update({field_name: values})
         setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
 
     @classmethod
     def get_initial_m2m_values(cls, instance, field_name):
-        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        init_values = getattr(
+            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
+        ) or {}
         return init_values.get(field_name)
 
     @classmethod
     def clear_initial_m2m_field_values(cls, instance, field_name):
-        init_values = getattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, None) or {}
+        init_values = getattr(
+            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
+        ) or {}
         init_values.pop(field_name, None)
         setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
 
@@ -510,7 +515,9 @@ class AuditEvent(models.Model):
             for instance in iter_records():
                 delta = {}
                 for field_name in field_names:
-                    value = cls.get_field_value(instance, field_name, bootstrap=True)
+                    value = cls.get_field_value(
+                        instance, field_name, bootstrap=True
+                    )
                     delta[field_name] = {"new": value}
                 yield cls(
                     object_class_path=object_class_path,

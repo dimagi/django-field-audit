@@ -64,10 +64,9 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         cls.save = _decorate_db_write(cls.save)
         cls.delete = _decorate_db_write(cls.delete)
         cls.refresh_from_db = _decorate_refresh_from_db(cls.refresh_from_db)
-        
-        # Register M2M signal handlers for any ManyToManyFields in the audited fields
+
+        # Register M2M signal handlers for ManyToManyFields in audited fields
         _register_m2m_signals(cls, field_names)
-        
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
     if not field_names:
@@ -160,8 +159,8 @@ def _decorate_refresh_from_db(func):
 
 
 def _register_m2m_signals(cls, field_names):
-    """Register m2m_changed signal handlers for ManyToManyFields in the audited fields.
-    
+    """Register m2m_changed signal handlers for ManyToManyFields.
+
     :param cls: The model class being audited
     :param field_names: List of field names that are being audited
     """
@@ -181,13 +180,13 @@ def _register_m2m_signals(cls, field_names):
 
 
 def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
-    """Signal handler for m2m_changed to audit ManyToManyField changes in real-time.
-    
+    """Signal handler for m2m_changed to audit ManyToManyField changes.
+
     :param sender: The intermediate model class for the ManyToManyField
     :param instance: The instance whose many-to-many relation is updated
-    :param action: A string indicating the type of update ('pre_add', 'post_add', etc.)
-    :param pk_set: For add/remove actions, this is a set of primary key values
-    :param model: The class of the objects that are added to, removed from or cleared
+    :param action: A string indicating the type of update
+    :param pk_set: For add/remove actions, set of primary key values
+    :param model: The class of the objects that are added/removed/cleared
     """
     from .models import AuditEvent
 
@@ -196,7 +195,7 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
 
     if type(instance) not in _audited_models:
         return
-        
+
     # Find which M2M field this change relates to
     m2m_field = None
     field_name = None
@@ -209,13 +208,13 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
             m2m_field = field
             field_name = field.name
             break
-    
+
     if not m2m_field or field_name not in AuditEvent.field_names(instance):
         return
 
     if action == 'pre_clear':
-        # `pk_set` is not supplied for clear actions. so we need to determine the initial
-        # values in the `pre_clear` event
+        # `pk_set` not supplied for clear actions. Determine initial values
+        # in the `pre_clear` event
         AuditEvent.attach_initial_m2m_values(instance, field_name)
         return
 
@@ -230,9 +229,11 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
             return
         delta_key = 'add' if action == 'post_add' else 'remove'
         delta = {field_name: {delta_key: list(pk_set)}}
-        
+
     req = request.get()
-    event = AuditEvent.create_audit_event(instance.pk, instance.__class__, delta, False, False, req)
+    event = AuditEvent.create_audit_event(
+        instance.pk, instance.__class__, delta, False, False, req
+    )
     if event is not None:
         event.save()
 

@@ -8,7 +8,7 @@ from field_audit.models import AuditEvent
 
 class TestAuditEventM2M(TestCase):
     def test_manytomany_field_auditing(self):
-        """Test that ManyToManyField relationships are properly handled in audit events."""
+        """Test ManyToManyField relationships are properly handled."""
         from .models import CrewMember, Certification
 
         # Create some certifications
@@ -38,7 +38,7 @@ class TestAuditEventM2M(TestCase):
         create_event = events.filter(is_create=True).first()
         self.assertIsNotNone(create_event)
 
-        # The delta should contain the field values including the ManyToMany field
+        # Delta should contain field values including ManyToMany field
         delta = create_event.delta
         self.assertIn('name', delta)
         self.assertIn('title', delta)
@@ -48,16 +48,23 @@ class TestAuditEventM2M(TestCase):
         update_event = events.filter(is_create=False).first()
         self.assertIsNotNone(update_event)
         delta = update_event.delta
-        self.assertEqual(set(delta['certifications']['add']), {cert1.id, cert2.id})
-
+        self.assertEqual(
+            set(delta['certifications']['add']), {cert1.id, cert2.id}
+        )
 
     def test_manytomany_field_modification_auditing(self):
         """Test that ManyToManyField changes are properly audited."""
         from .models import CrewMember, Certification
 
-        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
-        cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
-        cert3 = Certification.objects.create(name='CPL', certification_type='Commercial')
+        cert1 = Certification.objects.create(
+            name='PPL', certification_type='Private'
+        )
+        cert2 = Certification.objects.create(
+            name='IR', certification_type='Instrument'
+        )
+        cert3 = Certification.objects.create(
+            name='CPL', certification_type='Commercial'
+        )
 
         crew_member = CrewMember.objects.create(
             name='Test Pilot',
@@ -81,14 +88,17 @@ class TestAuditEventM2M(TestCase):
             {'add': [3]},
         ])
 
-
     def test_manytomany_field_clear_auditing(self):
         """Test that clearing ManyToManyField is properly audited."""
         from .models import CrewMember, Certification
 
         # Create certifications and crew member
-        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
-        cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
+        cert1 = Certification.objects.create(
+            name='PPL', certification_type='Private'
+        )
+        cert2 = Certification.objects.create(
+            name='IR', certification_type='Instrument'
+        )
 
         crew_member = CrewMember.objects.create(
             name='Test Pilot',
@@ -97,7 +107,9 @@ class TestAuditEventM2M(TestCase):
         )
         crew_member.certifications.set([cert1, cert2])
 
-        initial_events_count = AuditEvent.objects.by_model(CrewMember).count()
+        initial_events_count = AuditEvent.objects.by_model(
+            CrewMember
+        ).count()
 
         # Clear all certifications
         crew_member.certifications.clear()
@@ -105,19 +117,25 @@ class TestAuditEventM2M(TestCase):
         events = AuditEvent.objects.by_model(CrewMember).order_by('event_date')
         self.assertEqual(events.count(), initial_events_count + 1)
 
-        latest_event = events.filter(is_create=False, is_delete=False).last()
+        latest_event = events.filter(
+            is_create=False, is_delete=False
+        ).last()
         delta = latest_event.delta
-        self.assertEqual(set(delta['certifications']['removed']), {cert1.id, cert2.id})
-
+        self.assertEqual(
+            set(delta['certifications']['removed']), {cert1.id, cert2.id}
+        )
 
     def test_manytomany_field_realtime_auditing_with_add_remove(self):
-        """Test that ManyToManyField changes create audit events immediately via signals."""
+        """Test M2M changes create audit events immediately via signals."""
         from .models import CrewMember, Certification
 
         # Create certifications and crew member
-        cert1 = Certification.objects.create(name='PPL', certification_type='Private')
-        cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
-        cert3 = Certification.objects.create(name='CPL', certification_type='Commercial')
+        cert1 = Certification.objects.create(
+            name='PPL', certification_type='Private'
+        )
+        cert2 = Certification.objects.create(
+            name='IR', certification_type='Instrument'
+        )
 
         crew_member = CrewMember.objects.create(
             name='Test Pilot',
@@ -125,32 +143,48 @@ class TestAuditEventM2M(TestCase):
             flight_hours=1500.0
         )
 
-        initial_events_count = AuditEvent.objects.by_model(CrewMember).count()
+        initial_events_count = AuditEvent.objects.by_model(
+            CrewMember
+        ).count()
         self.assertEqual(initial_events_count, 1)
 
-        # Test direct add() operation - should create audit event immediately
+        # Test direct add() - should create audit event immediately
         crew_member.certifications.add(cert1, cert2)
 
-        # Check that an audit event was created immediately (without save())
-        events = AuditEvent.objects.by_model(CrewMember).order_by('event_date')
+        # Check audit event was created immediately (without save())
+        events = AuditEvent.objects.by_model(CrewMember).order_by(
+            'event_date'
+        )
 
         new_events = list(events[initial_events_count:])
-        self.assertEqual(len(new_events), 1, "M2M add() should create audit event immediately")
+        self.assertEqual(
+            len(new_events), 1, "M2M add() should create audit event"
+        )
         latest_event = new_events[-1]
         self.assertIn('certifications', latest_event.delta)
-        self.assertEqual(set(latest_event.delta['certifications']['add']), {cert1.id, cert2.id})
+        self.assertEqual(
+            set(latest_event.delta['certifications']['add']),
+            {cert1.id, cert2.id}
+        )
 
-        # Test direct remove() operation - should create audit event immediately
+        # Test direct remove() - should create audit event immediately
         current_events_count = events.count()
         crew_member.certifications.remove(cert1)
 
-        events = AuditEvent.objects.by_model(CrewMember).order_by('event_date')
-        self.assertEqual(events.count(), current_events_count + 1, "M2M remove() should create audit event immediately")
+        events = AuditEvent.objects.by_model(CrewMember).order_by(
+            'event_date'
+        )
+        self.assertEqual(
+            events.count(), current_events_count + 1,
+            "M2M remove() should create audit event"
+        )
 
         # Check the remove event
         latest_event = events.last()
         self.assertIn('certifications', latest_event.delta)
-        self.assertEqual(set(latest_event.delta['certifications']['remove']), {cert1.id})
+        self.assertEqual(
+            set(latest_event.delta['certifications']['remove']), {cert1.id}
+        )
 
 
 class TestAuditEventBootstrappingM2M(TestCase):
@@ -159,8 +193,12 @@ class TestAuditEventBootstrappingM2M(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         from tests.models import Certification, CrewMember
-        cls.cert1 = Certification.objects.create(name='PPL', certification_type='Private')
-        cls.cert2 = Certification.objects.create(name='IR', certification_type='Instrument')
+        cls.cert1 = Certification.objects.create(
+            name='PPL', certification_type='Private'
+        )
+        cls.cert2 = Certification.objects.create(
+            name='IR', certification_type='Instrument'
+        )
 
         crew_member = CrewMember.objects.create(
             name='Test Pilot',
@@ -182,4 +220,7 @@ class TestAuditEventBootstrappingM2M(TestCase):
         bootstrap_events = AuditEvent.objects.filter(is_bootstrap=True)
         self.assertEqual(len(bootstrap_events), created_count)
         event = bootstrap_events[0]
-        self.assertEqual(set(event.delta['certifications']['new']), {self.cert1.id, self.cert2.id})
+        self.assertEqual(
+            set(event.delta['certifications']['new']),
+            {self.cert1.id, self.cert2.id}
+        )
