@@ -190,11 +190,10 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
     :param model: The class of the objects that are added to, removed from or cleared
     """
     from .models import AuditEvent
-    from .auditors import audit_dispatcher
 
     if action not in ('post_add', 'post_remove', 'post_clear', 'pre_clear'):
         return
-        
+
     if type(instance) not in _audited_models:
         return
         
@@ -233,7 +232,7 @@ def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
         delta = {field_name: {delta_key: list(pk_set)}}
         
     req = request.get()
-    event = AuditEvent.create_audit_event(instance.pk, model, delta, False, False, req)
+    event = AuditEvent.create_audit_event(instance.pk, instance.__class__, delta, False, False, req)
     if event is not None:
         event.save()
 
