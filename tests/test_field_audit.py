@@ -21,7 +21,8 @@ from field_audit.models import AuditEvent, AuditingManager
 from .models import (
     Aerodrome,
     Aircraft,
-    Certification, CrewMember,
+    Certification,
+    CrewMember,
     Flight,
     SimpleModel,
     ModelWithAuditingManager,
