@@ -65,7 +65,6 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         cls.delete = _decorate_db_write(cls.delete)
         cls.refresh_from_db = _decorate_refresh_from_db(cls.refresh_from_db)
 
-        # Register M2M signal handlers for ManyToManyFields in audited fields
         _register_m2m_signals(cls, field_names)
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
@@ -168,7 +167,6 @@ def _register_m2m_signals(cls, field_names):
         try:
             field = cls._meta.get_field(field_name)
             if isinstance(field, models.ManyToManyField):
-                # Connect the signal to the through model of this M2M field
                 m2m_changed.connect(
                     _m2m_changed_handler,
                     sender=field.remote_field.through,
@@ -179,14 +177,13 @@ def _register_m2m_signals(cls, field_names):
             continue
 
 
-def _m2m_changed_handler(sender, instance, action, pk_set, model, **kwargs):
+def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
     """Signal handler for m2m_changed to audit ManyToManyField changes.
 
     :param sender: The intermediate model class for the ManyToManyField
     :param instance: The instance whose many-to-many relation is updated
     :param action: A string indicating the type of update
     :param pk_set: For add/remove actions, set of primary key values
-    :param model: The class of the objects that are added/removed/cleared
     """
     from .models import AuditEvent
 
