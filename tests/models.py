@@ -10,6 +10,7 @@ from django.db.models import (
     ForeignKey,
     IntegerField,
     JSONField,
+    ManyToManyField,
 )
 
 from field_audit import audit_fields
@@ -41,12 +42,13 @@ class ModelWithValueOnSave(Model):
         super().save(*args, **kwargs)
 
 
-@audit_fields("name", "title", "flight_hours")
+@audit_fields("name", "title", "flight_hours", "certifications")
 class CrewMember(Model):
     id = AutoField(primary_key=True)
     name = CharField(max_length=256)
     title = CharField(max_length=64)
     flight_hours = DecimalField(max_digits=10, decimal_places=4, default=0.0)
+    certifications = ManyToManyField('Certification', blank=True)
 
 
 @audit_fields("tail_number", "make_model", "operated_by")
@@ -109,3 +111,10 @@ class PkAuto(Model):
 @audit_fields("id")
 class PkJson(Model):
     id = JSONField(primary_key=True)
+
+
+@audit_fields("name", "certification_type")
+class Certification(Model):
+    id = AutoField(primary_key=True)
+    name = CharField(max_length=128)
+    certification_type = CharField(max_length=64)

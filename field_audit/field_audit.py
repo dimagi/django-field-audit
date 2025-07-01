@@ -2,6 +2,7 @@ import contextvars
 from functools import wraps
 
 from django.db import models, router, transaction
+from django.db.models.signals import m2m_changed
 
 from .utils import get_fqcn
 
@@ -63,6 +64,8 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         cls.save = _decorate_db_write(cls.save)
         cls.delete = _decorate_db_write(cls.delete)
         cls.refresh_from_db = _decorate_refresh_from_db(cls.refresh_from_db)
+
+        _register_m2m_signals(cls, field_names)
         _audited_models[cls] = get_fqcn(cls) if class_path is None else class_path  # noqa: E501
         return cls
     if not field_names:
@@ -152,6 +155,86 @@ def _decorate_refresh_from_db(func):
 
     from .models import AuditEvent
     return wrapper
+
+
+def _register_m2m_signals(cls, field_names):
+    """Register m2m_changed signal handlers for ManyToManyFields.
+
+    :param cls: The model class being audited
+    :param field_names: List of field names that are being audited
+    """
+    for field_name in field_names:
+        try:
+            field = cls._meta.get_field(field_name)
+            if isinstance(field, models.ManyToManyField):
+                m2m_changed.connect(
+                    _m2m_changed_handler,
+                    sender=field.remote_field.through,
+                    weak=False
+                )
+        except Exception:
+            # If field doesn't exist or isn't a M2M field, continue
+            continue
+
+
+def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
+    """Signal handler for m2m_changed to audit ManyToManyField changes.
+
+    :param sender: The intermediate model class for the ManyToManyField
+    :param instance: The instance whose many-to-many relation is updated
+    :param action: A string indicating the type of update
+    :param pk_set: For add/remove actions, set of primary key values
+    """
+    from .models import AuditEvent
+
+    if action not in ('post_add', 'post_remove', 'post_clear', 'pre_clear'):
+        return
+
+    if type(instance) not in _audited_models:
+        return
+
+    # Find which M2M field this change relates to
+    m2m_field = None
+    field_name = None
+    for field in instance._meta.get_fields():
+        if (
+            isinstance(field, models.ManyToManyField) and
+            hasattr(field, 'remote_field') and
+            field.remote_field.through == sender
+        ):
+            m2m_field = field
+            field_name = field.name
+            break
+
+    if not m2m_field or field_name not in AuditEvent.field_names(instance):
+        return
+
+    if action == 'pre_clear':
+        # `pk_set` not supplied for clear actions. Determine initial values
+        # in the `pre_clear` event
+        AuditEvent.attach_initial_m2m_values(instance, field_name)
+        return
+
+    if action == 'post_clear':
+        initial_values = AuditEvent.get_initial_m2m_values(instance, field_name)
+        if not initial_values:
+            return
+        delta = {field_name: {'remove': initial_values}}
+    else:
+        if not pk_set:
+            # the change was a no-op
+            return
+        delta_key = 'add' if action == 'post_add' else 'remove'
+        delta = {field_name: {delta_key: list(pk_set)}}
+
+    req = request.get()
+    event = AuditEvent.create_audit_event(
+        instance.pk, instance.__class__, delta, False, False, req
+    )
+    if event is not None:
+        event.save()
+
+    AuditEvent.clear_initial_m2m_field_values(instance, field_name)
 
 
 def get_audited_models():

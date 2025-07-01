@@ -21,6 +21,7 @@ from field_audit.models import AuditEvent, AuditingManager
 from .models import (
     Aerodrome,
     Aircraft,
+    Certification,
     CrewMember,
     Flight,
     SimpleModel,
@@ -123,6 +124,7 @@ class TestFieldAudit(TestCase):
                 Aerodrome,
                 Aircraft,
                 CrewMember,
+                Certification,
                 Flight,
                 SimpleModel,
                 ModelWithAuditingManager,
