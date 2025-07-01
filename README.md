@@ -175,7 +175,7 @@ M2M changes use specific delta structures in audit events:
 
 - **Add**: `{'certifications': {'add': [1, 2]}}`
 - **Remove**: `{'certifications': {'remove': [2]}}`
-- **Clear**: `{'certifications': {'removed': [1, 2]}}`
+- **Clear**: `{'certifications': {'remove': [1, 2]}}`
 - **Create** / **Bootstrap**: `{'certifications': {'new': []}}`
 
 #### Bootstrap events for models with existing records

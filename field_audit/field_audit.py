@@ -219,7 +219,7 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
         initial_values = AuditEvent.get_initial_m2m_values(instance, field_name)
         if not initial_values:
             return
-        delta = {field_name: {'removed': initial_values}}
+        delta = {field_name: {'remove': initial_values}}
     else:
         if not pk_set:
             # the change was a no-op
