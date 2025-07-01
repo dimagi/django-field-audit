@@ -125,7 +125,7 @@ class TestAuditEventM2M(TestCase):
         ).last()
         delta = latest_event.delta
         self.assertEqual(
-            set(delta['certifications']['removed']), {cert1.id, cert2.id}
+            set(delta['certifications']['remove']), {cert1.id, cert2.id}
         )
 
     def test_manytomany_field_realtime_auditing_with_add_remove(self):
