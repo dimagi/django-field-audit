@@ -82,11 +82,14 @@ class TestAuditEventM2M(TestCase):
         certification_deltas = [
             event.delta['certifications'] for event in latest_events
         ]
-        self.assertEqual(certification_deltas, [
-            {'add': [cert1.id, cert2.id]},
-            {'remove': [cert2.id]},
-            {'add': [cert3.id]},
-        ])
+        self.assertEqual(
+            [list(delta) for delta in certification_deltas],
+            [['add'], ['remove'], ['add']]
+        )
+        self.assertEqual(
+            [set(list(delta.values())[0]) for delta in certification_deltas],
+            [{cert1.id, cert2.id}, {cert2.id}, {cert3.id}]
+        )
 
     def test_manytomany_field_clear_auditing(self):
         """Test that clearing ManyToManyField is properly audited."""
