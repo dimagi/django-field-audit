@@ -16,7 +16,7 @@ jobs:
         python-version: 3.9
     - name: Setup
       run: |
-        uv sync --locked
+        uv sync --locked --dev
     - name: Run coverage
       run: |
         coverage run -m pytest

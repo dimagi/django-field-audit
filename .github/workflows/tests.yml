@@ -44,7 +44,7 @@ jobs:
         python-version: ${{ matrix.python }}
     - name: Setup
       run: |
-        uv sync --locked --no-install-package=django
+        uv sync --locked --dev --no-install-package=django
         uv pip install "${{ matrix.django }}" psycopg2-binary
     - name: Run tests
       env:
@@ -57,7 +57,7 @@ jobs:
             "HOST":"localhost",
             "PORT":"5432"
           }
-      run: pytest --cov=field_audit --cov-branch -v
+      run: uv run pytest --cov=field_audit --cov-branch -v
       continue-on-error: ${{ matrix.experimental }}
     - name: Check migrations
       run: |
@@ -67,4 +67,4 @@ jobs:
         git diff --cached --exit-code
       continue-on-error: ${{ matrix.experimental }}
     - name: Check style
-      run: ruff check
+      run: uv run ruff check
