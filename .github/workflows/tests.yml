@@ -38,14 +38,14 @@ jobs:
           --health-retries 5
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-python@v4
+    - uses: astral-sh/setup-uv@v6
       with:
+        version: '>=0.7'
         python-version: ${{ matrix.python }}
     - name: Setup
       run: |
-        python --version
-        pip install --upgrade pip wheel
-        pip install "${{ matrix.django }}" psycopg2-binary pynose flake8 coverage
+        uv sync --locked --no-install-package=django
+        uv pip install "${{ matrix.django }}" psycopg2-binary
     - name: Run tests
       env:
         DB_SETTINGS: >-

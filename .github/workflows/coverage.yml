@@ -10,14 +10,13 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - uses: actions/setup-python@v4
+    - uses: astral-sh/setup-uv@v6
       with:
+        version: '>=0.7'
         python-version: 3.9
     - name: Setup
       run: |
-        python --version
-        pip install --upgrade pip wheel
-        pip install django pynose coverage
+        uv sync --locked
     - name: Run coverage
       run: |
         coverage run -m nose
