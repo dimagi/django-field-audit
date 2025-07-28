@@ -233,7 +233,7 @@ class AuditEvent(models.Model):
         :param model_class: a Django Model class under audit
         :param field_names: collection of field names to audit on the model
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.attach_field_names() instead.
         """
         warnings.warn(
@@ -251,7 +251,7 @@ class AuditEvent(models.Model):
 
         :param model_class: a Django Model class under audit
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.get_field_names() instead.
         """
         warnings.warn(
@@ -270,7 +270,7 @@ class AuditEvent(models.Model):
         :param instance: an instance of a Django model
         :param field_name: name of a field on ``instance``
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.get_field_value() instead.
         """
         warnings.warn(
@@ -292,7 +292,7 @@ class AuditEvent(models.Model):
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance
             
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.attach_initial_values() instead.
         """
         warnings.warn(
@@ -306,7 +306,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def attach_initial_m2m_values(cls, instance, field_name):
-        """.. deprecated:: 2.0
+        """.. deprecated:: 1.4
             Use AuditService.attach_initial_m2m_values() instead.
         """
         warnings.warn(
@@ -320,7 +320,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def get_initial_m2m_values(cls, instance, field_name):
-        """.. deprecated:: 2.0
+        """.. deprecated:: 1.4
             Use AuditService.get_initial_m2m_values() instead.
         """
         warnings.warn(
@@ -334,7 +334,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def clear_initial_m2m_field_values(cls, instance, field_name):
-        """.. deprecated:: 2.0
+        """.. deprecated:: 1.4
             Use AuditService.clear_initial_m2m_field_values() instead.
         """
         warnings.warn(
@@ -348,7 +348,7 @@ class AuditEvent(models.Model):
 
     @classmethod
     def get_m2m_field_value(cls, instance, field_name):
-        """.. deprecated:: 2.0
+        """.. deprecated:: 1.4
             Use AuditService.get_m2m_field_value() instead.
         """
         warnings.warn(
@@ -369,7 +369,7 @@ class AuditEvent(models.Model):
         :raises: ``AttachValuesError`` if initial values are not attached to
             the instance
             
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.reset_initial_values() instead.
         """
         warnings.warn(
@@ -389,7 +389,7 @@ class AuditEvent(models.Model):
         All [keyword] arguments are passed directly to
         ``make_audit_event_from_instance()``, see that method for usage.
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.audit_field_changes() instead.
         """
         warnings.warn(
@@ -417,7 +417,7 @@ class AuditEvent(models.Model):
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both is_create and is_delete are true
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.get_delta_from_instance() instead.
         """
         warnings.warn(
@@ -442,7 +442,7 @@ class AuditEvent(models.Model):
         :raises: ``AssertionError`` if both old_values and new_values are empty
         do not match
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.create_delta() instead.
         """
         warnings.warn(
@@ -475,7 +475,7 @@ class AuditEvent(models.Model):
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.make_audit_event_from_instance() instead.
         """
         warnings.warn(
@@ -504,7 +504,7 @@ class AuditEvent(models.Model):
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             no difference between ``old_values`` and ``new_values``)
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.make_audit_event_from_values() instead.
         """
         warnings.warn(
@@ -519,7 +519,7 @@ class AuditEvent(models.Model):
     @classmethod
     def create_audit_event(cls, object_pk, object_cls, delta, is_create,
                            is_delete, request):
-        """.. deprecated:: 2.0
+        """.. deprecated:: 1.4
             Use AuditService.create_audit_event() instead.
         """
         warnings.warn(
@@ -551,7 +551,7 @@ class AuditEvent(models.Model):
             model's default manager.
         :returns: number of bootstrap records created
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.bootstrap_existing_model_records() instead.
         """
         warnings.warn(
@@ -576,7 +576,7 @@ class AuditEvent(models.Model):
             (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
         :returns: number of bootstrap records created
         
-        .. deprecated:: 2.0
+        .. deprecated:: 1.4
             Use AuditService.bootstrap_top_up() instead.
         """
         warnings.warn(
