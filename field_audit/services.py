@@ -1,7 +1,6 @@
 from itertools import islice
 
-from django.db import models, transaction
-from django.utils import timezone
+from django.db import models
 
 from .const import BOOTSTRAP_BATCH_SIZE
 

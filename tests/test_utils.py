@@ -77,7 +77,7 @@ class TestRunBootstrapExistingModel(SimpleTestCase):
         migration_op = run_bootstrap(*run_bs_args, reverse_func=reverse)
         self.assertIsInstance(migration_op, RunPython)
         self.assertIs(reverse, migration_op.reverse_code)
-        path = "field_audit.models.AuditEvent.bootstrap_existing_model_records"
+        path = "field_audit.services.AuditService.bootstrap_existing_model_records"
         with patch(path) as do_bootstrap:
             migration_op.code()
             do_bootstrap.assert_called_once_with(*run_bs_args, *run_bs_def_args)

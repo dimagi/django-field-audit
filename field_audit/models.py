@@ -1,7 +1,6 @@
 import warnings
 from enum import Enum
 from functools import wraps
-from itertools import islice
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder

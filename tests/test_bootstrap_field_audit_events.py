@@ -81,19 +81,19 @@ class TestCommand(TestCase):
                 bootstrap.Command.setup_models()
 
     def test_bootstrap_uses_default_batch_size(self):
-        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+        with patch("field_audit.services.AuditService.bootstrap_top_up") as mock:
             self.quiet_command("top-up", "PkAuto")
             mock.assert_called_once_with(
                 PkAuto, ANY, batch_size=BOOTSTRAP_BATCH_SIZE,
             )
 
     def test_bootstrap_allows_custom_batch_size(self):
-        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+        with patch("field_audit.services.AuditService.bootstrap_top_up") as mock:
             self.quiet_command("top-up", "--batch-size", "1", "PkAuto")
             mock.assert_called_once_with(PkAuto, ANY, batch_size=1)
 
     def test_bootstrap_disables_batching_for_batch_size_zero(self):
-        with patch.object(AuditEvent, "bootstrap_top_up") as mock:
+        with patch("field_audit.services.AuditService.bootstrap_top_up") as mock:
             self.quiet_command("top-up", "--batch-size", "0", "PkAuto")
             mock.assert_called_once_with(PkAuto, ANY, batch_size=None)
 

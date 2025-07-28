@@ -88,10 +88,10 @@ class TestFieldAudit(TestCase):
                 def unsupported(self):
                     pass
 
-            with patch.object(AuditEvent, "attach_initial_values") as classmeth:
+            with patch("field_audit.services.AuditService.attach_initial_values") as classmeth:
                 item = Item()
                 classmeth.assert_called_once()
-            with patch.object(AuditEvent, "audit_field_changes") as classmeth:
+            with patch("field_audit.services.AuditService.audit_field_changes") as classmeth:
                 item.save()
                 classmeth.assert_called_once()
                 classmeth.reset_mock()
