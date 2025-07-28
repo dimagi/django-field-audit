@@ -280,15 +280,12 @@ The example `manage.py` is available for making new migrations.
 uv run python example/manage.py makemigrations field_audit
 ```
 
-### Uploading to PyPI
+### Publishing a new version to PyPI
 
-First bump the package version in the `field_audit/__init__.py` file. Then create a changelog entry in the CHANGELOG.md
-file. After these changes are merged, you should tag the main branch with the new version. Then, package and upload the generated files to PyPI.
+Push a new tag to Github using the format vX.Y.Z where X.Y.Z matches the version
+in [`__init__.py`](field_audit/__init__.py).
 
-```shell
-uv build
-uv publish
-```
+Publishing is automated with [Github Actions](.github/workflows/pypi.yml).
 
 ## TODO
 
