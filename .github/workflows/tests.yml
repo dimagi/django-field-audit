@@ -67,4 +67,4 @@ jobs:
         git diff --cached --exit-code
       continue-on-error: ${{ matrix.experimental }}
     - name: Check style
-      run: flake8 --config=setup.cfg
+      run: ruff check

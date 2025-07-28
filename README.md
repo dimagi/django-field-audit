@@ -263,7 +263,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Style check
   ```shell
-  uv run flake8 --config=setup.cfg
+  ruff check
   ```
 
 - Coverage

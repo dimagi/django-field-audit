@@ -40,15 +40,23 @@ name = "field_audit"
 dev-dependencies = [
     "coverage",
     "pynose",
-    "flake8",
+    "ruff",
 ]
 
 [build-system]
 requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
-[tool.flake8]
-max-line-length = 80
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/migrations/*" = ["E501"]
+
+[tool.ruff.format]
 exclude = [
     "./build",
     ".venv",
