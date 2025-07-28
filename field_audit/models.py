@@ -231,12 +231,13 @@ class AuditEvent(models.Model):
 
         :param model_class: a Django Model class under audit
         :param field_names: collection of field names to audit on the model
-        
+
         .. deprecated:: 1.4
             Use AuditService.attach_field_names() instead.
         """
         warnings.warn(
-            "AuditEvent.attach_field_names() is deprecated. Use AuditService.attach_field_names() instead.",
+            "AuditEvent.attach_field_names() is deprecated. "
+            "Use AuditService.attach_field_names() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -249,12 +250,13 @@ class AuditEvent(models.Model):
         """Returns the audit field names stored on the audited Model class
 
         :param model_class: a Django Model class under audit
-        
+
         .. deprecated:: 1.4
             Use AuditService.get_field_names() instead.
         """
         warnings.warn(
-            "AuditEvent.field_names() is deprecated. Use AuditService.get_field_names() instead.",
+            "AuditEvent.field_names() is deprecated. "
+            "Use AuditService.get_field_names() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -268,12 +270,13 @@ class AuditEvent(models.Model):
 
         :param instance: an instance of a Django model
         :param field_name: name of a field on ``instance``
-        
+
         .. deprecated:: 1.4
             Use AuditService.get_field_value() instead.
         """
         warnings.warn(
-            "AuditEvent.get_field_value() is deprecated. Use AuditService.get_field_value() instead.",
+            "AuditEvent.get_field_value() is deprecated. "
+            "Use AuditService.get_field_value() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -290,12 +293,13 @@ class AuditEvent(models.Model):
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance
-            
+
         .. deprecated:: 1.4
             Use AuditService.attach_initial_values() instead.
         """
         warnings.warn(
-            "AuditEvent.attach_initial_values() is deprecated. Use AuditService.attach_initial_values() instead.",
+            "AuditEvent.attach_initial_values() is deprecated. "
+            "Use AuditService.attach_initial_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -309,7 +313,8 @@ class AuditEvent(models.Model):
             Use AuditService.attach_initial_m2m_values() instead.
         """
         warnings.warn(
-            "AuditEvent.attach_initial_m2m_values() is deprecated. Use AuditService.attach_initial_m2m_values() instead.",
+            "AuditEvent.attach_initial_m2m_values() is deprecated. "
+            "Use AuditService.attach_initial_m2m_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -323,7 +328,8 @@ class AuditEvent(models.Model):
             Use AuditService.get_initial_m2m_values() instead.
         """
         warnings.warn(
-            "AuditEvent.get_initial_m2m_values() is deprecated. Use AuditService.get_initial_m2m_values() instead.",
+            "AuditEvent.get_initial_m2m_values() is deprecated. "
+            "Use AuditService.get_initial_m2m_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -337,7 +343,8 @@ class AuditEvent(models.Model):
             Use AuditService.clear_initial_m2m_field_values() instead.
         """
         warnings.warn(
-            "AuditEvent.clear_initial_m2m_field_values() is deprecated. Use AuditService.clear_initial_m2m_field_values() instead.",
+            "AuditEvent.clear_initial_m2m_field_values() is deprecated. "
+            "Use AuditService.clear_initial_m2m_field_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -351,7 +358,8 @@ class AuditEvent(models.Model):
             Use AuditService.get_m2m_field_value() instead.
         """
         warnings.warn(
-            "AuditEvent.get_m2m_field_value() is deprecated. Use AuditService.get_m2m_field_value() instead.",
+            "AuditEvent.get_m2m_field_value() is deprecated. "
+            "Use AuditService.get_m2m_field_value() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -367,12 +375,13 @@ class AuditEvent(models.Model):
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are not attached to
             the instance
-            
+
         .. deprecated:: 1.4
             Use AuditService.reset_initial_values() instead.
         """
         warnings.warn(
-            "AuditEvent.reset_initial_values() is deprecated. Use AuditService.reset_initial_values() instead.",
+            "AuditEvent.reset_initial_values() is deprecated. "
+            "Use AuditService.reset_initial_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -387,12 +396,13 @@ class AuditEvent(models.Model):
 
         All [keyword] arguments are passed directly to
         ``make_audit_event_from_instance()``, see that method for usage.
-        
+
         .. deprecated:: 1.4
             Use AuditService.audit_field_changes() instead.
         """
         warnings.warn(
-            "AuditEvent.audit_field_changes() is deprecated. Use AuditService.audit_field_changes() instead.",
+            "AuditEvent.audit_field_changes() is deprecated. "
+            "Use AuditService.audit_field_changes() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -415,12 +425,13 @@ class AuditEvent(models.Model):
             DB record (setting ``True`` implies that ``instance`` is changing)
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both is_create and is_delete are true
-        
+
         .. deprecated:: 1.4
             Use AuditService.get_delta_from_instance() instead.
         """
         warnings.warn(
-            "AuditEvent.get_delta_from_instance() is deprecated. Use AuditService.get_delta_from_instance() instead.",
+            "AuditEvent.get_delta_from_instance() is deprecated. "
+            "Use AuditService.get_delta_from_instance() instead.",
             DeprecationWarning,
             stacklevel=2
         )
@@ -440,14 +451,15 @@ class AuditEvent(models.Model):
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both old_values and new_values are empty
         do not match
-        
+
         .. deprecated:: 1.4
             Use AuditService.create_delta() instead.
         """
         warnings.warn(
-            "AuditEvent.create_delta() is deprecated. Use AuditService.create_delta() instead.",
+            "AuditEvent.create_delta() is deprecated. "
+            "Use AuditService.create_delta() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         from .services import get_audit_service
         service = get_audit_service()
@@ -473,18 +485,21 @@ class AuditEvent(models.Model):
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
-        
+
         .. deprecated:: 1.4
             Use AuditService.make_audit_event_from_instance() instead.
         """
         warnings.warn(
-            "AuditEvent.make_audit_event_from_instance() is deprecated. Use AuditService.make_audit_event_from_instance() instead.",
+            "AuditEvent.make_audit_event_from_instance() is deprecated. "
+            "Use AuditService.make_audit_event_from_instance() instead.",
             DeprecationWarning,
             stacklevel=2
         )
         from .services import get_audit_service
         service = get_audit_service()
-        return service.make_audit_event_from_instance(instance, is_create, is_delete, request, object_pk)
+        return service.make_audit_event_from_instance(
+            instance, is_create, is_delete, request, object_pk
+        )
 
     @classmethod
     def make_audit_event_from_values(cls, old_values, new_values, object_pk,
@@ -502,18 +517,21 @@ class AuditEvent(models.Model):
             ``None`` if there is no request)
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             no difference between ``old_values`` and ``new_values``)
-        
+
         .. deprecated:: 1.4
             Use AuditService.make_audit_event_from_values() instead.
         """
         warnings.warn(
-            "AuditEvent.make_audit_event_from_values() is deprecated. Use AuditService.make_audit_event_from_values() instead.",
+            "AuditEvent.make_audit_event_from_values() is deprecated. "
+            "Use AuditService.make_audit_event_from_values() instead.",
             DeprecationWarning,
             stacklevel=2
         )
         from .services import get_audit_service
         service = get_audit_service()
-        return service.make_audit_event_from_values(old_values, new_values, object_pk, object_cls, request)
+        return service.make_audit_event_from_values(
+            old_values, new_values, object_pk, object_cls, request
+        )
 
     @classmethod
     def create_audit_event(cls, object_pk, object_cls, delta, is_create,
@@ -522,13 +540,16 @@ class AuditEvent(models.Model):
             Use AuditService.create_audit_event() instead.
         """
         warnings.warn(
-            "AuditEvent.create_audit_event() is deprecated. Use AuditService.create_audit_event() instead.",
+            "AuditEvent.create_audit_event() is deprecated. "
+            "Use AuditService.create_audit_event() instead.",
             DeprecationWarning,
             stacklevel=2
         )
         from .services import get_audit_service
         service = get_audit_service()
-        return service.create_audit_event(object_pk, object_cls, delta, is_create, is_delete, request)
+        return service.create_audit_event(
+            object_pk, object_cls, delta, is_create, is_delete, request
+        )
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
@@ -549,18 +570,21 @@ class AuditEvent(models.Model):
             If ``None`` (the default), ``.all().iterator()`` is called on the
             model's default manager.
         :returns: number of bootstrap records created
-        
+
         .. deprecated:: 1.4
             Use AuditService.bootstrap_existing_model_records() instead.
         """
         warnings.warn(
-            "AuditEvent.bootstrap_existing_model_records() is deprecated. Use AuditService.bootstrap_existing_model_records() instead.",
+            "AuditEvent.bootstrap_existing_model_records() is deprecated. "
+            "Use AuditService.bootstrap_existing_model_records() instead.",
             DeprecationWarning,
             stacklevel=2
         )
         from .services import get_audit_service
         service = get_audit_service()
-        return service.bootstrap_existing_model_records(model_class, field_names, batch_size, iter_records)
+        return service.bootstrap_existing_model_records(
+            model_class, field_names, batch_size, iter_records
+        )
 
     @classmethod
     def bootstrap_top_up(cls, model_class, field_names,
@@ -574,12 +598,13 @@ class AuditEvent(models.Model):
         :param batch_size:  see ``bootstrap_existing_model_records``
             (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
         :returns: number of bootstrap records created
-        
+
         .. deprecated:: 1.4
             Use AuditService.bootstrap_top_up() instead.
         """
         warnings.warn(
-            "AuditEvent.bootstrap_top_up() is deprecated. Use AuditService.bootstrap_top_up() instead.",
+            "AuditEvent.bootstrap_top_up() is deprecated. "
+            "Use AuditService.bootstrap_top_up() instead.",
             DeprecationWarning,
             stacklevel=2
         )

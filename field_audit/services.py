@@ -7,11 +7,11 @@ from .const import BOOTSTRAP_BATCH_SIZE
 
 class AuditService:
     """Service class containing the core audit logic extracted from AuditEvent.
-    
+
     This class can be subclassed to provide custom audit implementations while
     maintaining backward compatibility with the existing AuditEvent API.
     """
-    
+
     ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
     ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
     ATTACH_INIT_M2M_VALUES_AT = "__field_audit_init_m2m_values"
@@ -56,7 +56,7 @@ class AuditService:
             the instance
         """
         from .models import AttachValuesError
-        
+
         if hasattr(instance, self.ATTACH_INIT_VALUES_AT):
             # This should never happen, but to be safe, refuse to clobber
             # existing attributes.
@@ -111,7 +111,7 @@ class AuditService:
             the instance
         """
         from .models import AttachValuesError
-        
+
         try:
             values = getattr(instance, self.ATTACH_INIT_VALUES_AT)
         except AttributeError:
@@ -360,17 +360,19 @@ class AuditService:
 
 def get_audit_service():
     """Returns the configured audit service instance.
-    
+
     This can be overridden in settings by setting FIELD_AUDIT_SERVICE_CLASS.
     """
     from django.conf import settings
     from .utils import class_import_helper
-    
+
     settings_attr = "FIELD_AUDIT_SERVICE_CLASS"
     try:
         class_path = getattr(settings, settings_attr)
-        service_class = class_import_helper(class_path, f"{settings_attr!r} value", AuditService)
+        service_class = class_import_helper(
+            class_path, f"{settings_attr!r} value", AuditService
+        )
     except AttributeError:
         service_class = AuditService
-    
+
     return service_class()
