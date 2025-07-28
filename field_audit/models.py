@@ -1,3 +1,4 @@
+import warnings
 from enum import Enum
 from functools import wraps
 from itertools import islice
@@ -235,16 +236,36 @@ class AuditEvent(models.Model):
 
         :param model_class: a Django Model class under audit
         :param field_names: collection of field names to audit on the model
+        
+        .. deprecated:: 2.0
+            Use AuditService.attach_field_names() instead.
         """
-        setattr(model_class, cls.ATTACH_FIELD_NAMES_AT, field_names)
+        warnings.warn(
+            "AuditEvent.attach_field_names() is deprecated. Use AuditService.attach_field_names() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.attach_field_names(model_class, field_names)
 
     @classmethod
     def field_names(cls, model_class):
         """Returns the audit field names stored on the audited Model class
 
         :param model_class: a Django Model class under audit
+        
+        .. deprecated:: 2.0
+            Use AuditService.get_field_names() instead.
         """
-        return getattr(model_class, cls.ATTACH_FIELD_NAMES_AT)
+        warnings.warn(
+            "AuditEvent.field_names() is deprecated. Use AuditService.get_field_names() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.get_field_names(model_class)
 
     @staticmethod
     def get_field_value(instance, field_name, bootstrap=False):
@@ -252,15 +273,18 @@ class AuditEvent(models.Model):
 
         :param instance: an instance of a Django model
         :param field_name: name of a field on ``instance``
+        
+        .. deprecated:: 2.0
+            Use AuditService.get_field_value() instead.
         """
-        field = instance._meta.get_field(field_name)
-
-        if isinstance(field, models.ManyToManyField):
-            # ManyToManyField handled by Django signals
-            if bootstrap:
-                return AuditEvent.get_m2m_field_value(instance, field_name)
-            return []
-        return field.to_python(field.value_from_object(instance))
+        warnings.warn(
+            "AuditEvent.get_field_value() is deprecated. Use AuditService.get_field_value() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.get_field_value(instance, field_name, bootstrap)
 
     @classmethod
     def attach_initial_values(cls, instance):
@@ -271,55 +295,74 @@ class AuditEvent(models.Model):
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are already attached to
             the instance
+            
+        .. deprecated:: 2.0
+            Use AuditService.attach_initial_values() instead.
         """
-        if hasattr(instance, cls.ATTACH_INIT_VALUES_AT):
-            # This should never happen, but to be safe, refuse to clobber
-            # existing attributes.
-            raise AttachValuesError(
-                f"refusing to overwrite {cls.ATTACH_INIT_VALUES_AT!r} "
-                f"on model instance: {instance}"
-            )
-        field_names = cls.field_names(instance)
-        init_values = {f: cls.get_field_value(instance, f) for f in field_names}
-        setattr(instance, cls.ATTACH_INIT_VALUES_AT, init_values)
+        warnings.warn(
+            "AuditEvent.attach_initial_values() is deprecated. Use AuditService.attach_initial_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.attach_initial_values(instance)
 
     @classmethod
     def attach_initial_m2m_values(cls, instance, field_name):
-        field = instance._meta.get_field(field_name)
-        if not isinstance(field, models.ManyToManyField):
-            return None
-
-        values = cls.get_m2m_field_value(instance, field_name)
-        init_values = getattr(
-            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
-        ) or {}
-        init_values.update({field_name: values})
-        setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
+        """.. deprecated:: 2.0
+            Use AuditService.attach_initial_m2m_values() instead.
+        """
+        warnings.warn(
+            "AuditEvent.attach_initial_m2m_values() is deprecated. Use AuditService.attach_initial_m2m_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.attach_initial_m2m_values(instance, field_name)
 
     @classmethod
     def get_initial_m2m_values(cls, instance, field_name):
-        init_values = getattr(
-            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
-        ) or {}
-        return init_values.get(field_name)
+        """.. deprecated:: 2.0
+            Use AuditService.get_initial_m2m_values() instead.
+        """
+        warnings.warn(
+            "AuditEvent.get_initial_m2m_values() is deprecated. Use AuditService.get_initial_m2m_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.get_initial_m2m_values(instance, field_name)
 
     @classmethod
     def clear_initial_m2m_field_values(cls, instance, field_name):
-        init_values = getattr(
-            instance, cls.ATTACH_INIT_M2M_VALUES_AT, None
-        ) or {}
-        init_values.pop(field_name, None)
-        setattr(instance, cls.ATTACH_INIT_M2M_VALUES_AT, init_values)
+        """.. deprecated:: 2.0
+            Use AuditService.clear_initial_m2m_field_values() instead.
+        """
+        warnings.warn(
+            "AuditEvent.clear_initial_m2m_field_values() is deprecated. Use AuditService.clear_initial_m2m_field_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.clear_initial_m2m_field_values(instance, field_name)
 
     @classmethod
     def get_m2m_field_value(cls, instance, field_name):
-        if instance.pk is None:
-            # Instance is not saved, return empty list
-            return []
-        else:
-            # Instance is saved, we can access the related objects
-            related_manager = getattr(instance, field_name)
-            return list(related_manager.values_list('pk', flat=True))
+        """.. deprecated:: 2.0
+            Use AuditService.get_m2m_field_value() instead.
+        """
+        warnings.warn(
+            "AuditEvent.get_m2m_field_value() is deprecated. Use AuditService.get_m2m_field_value() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.get_m2m_field_value(instance, field_name)
 
     @classmethod
     def reset_initial_values(cls, instance):
@@ -329,14 +372,18 @@ class AuditEvent(models.Model):
         :param instance: instance of a Model subclass to be audited for changes
         :raises: ``AttachValuesError`` if initial values are not attached to
             the instance
+            
+        .. deprecated:: 2.0
+            Use AuditService.reset_initial_values() instead.
         """
-        try:
-            values = getattr(instance, cls.ATTACH_INIT_VALUES_AT)
-        except AttributeError:
-            raise AttachValuesError("cannot reset values that were never set")
-        delattr(instance, cls.ATTACH_INIT_VALUES_AT)
-        cls.attach_initial_values(instance)
-        return values
+        warnings.warn(
+            "AuditEvent.reset_initial_values() is deprecated. Use AuditService.reset_initial_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.reset_initial_values(instance)
 
     @classmethod
     def audit_field_changes(cls, *args, **kw):
@@ -345,10 +392,18 @@ class AuditEvent(models.Model):
 
         All [keyword] arguments are passed directly to
         ``make_audit_event_from_instance()``, see that method for usage.
+        
+        .. deprecated:: 2.0
+            Use AuditService.audit_field_changes() instead.
         """
-        event = cls.make_audit_event_from_instance(*args, **kw)
-        if event is not None:
-            event.save()
+        warnings.warn(
+            "AuditEvent.audit_field_changes() is deprecated. Use AuditService.audit_field_changes() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.audit_field_changes(*args, **kw)
 
     @classmethod
     def get_delta_from_instance(cls, instance, is_create, is_delete):
@@ -365,16 +420,18 @@ class AuditEvent(models.Model):
             DB record (setting ``True`` implies that ``instance`` is changing)
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both is_create and is_delete are true
+        
+        .. deprecated:: 2.0
+            Use AuditService.get_delta_from_instance() instead.
         """
-        assert not (is_create and is_delete), \
-            "is_create and is_delete cannot both be true"
-        fields_to_audit = cls.field_names(instance)
-        # SIDE EFFECT: fetch and reset initial values for next db write
-        init_values = cls.reset_initial_values(instance)
-        old_values = {} if is_create else init_values
-        new_values = {} if is_delete else \
-            {f: cls.get_field_value(instance, f) for f in fields_to_audit}
-        return cls.create_delta(old_values, new_values)
+        warnings.warn(
+            "AuditEvent.get_delta_from_instance() is deprecated. Use AuditService.get_delta_from_instance() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.get_delta_from_instance(instance, is_create, is_delete)
 
     @staticmethod
     def create_delta(old_values, new_values):
@@ -388,30 +445,18 @@ class AuditEvent(models.Model):
         :returns: {field_name: {'old': old_value, 'new': new_value}, ...}
         :raises: ``AssertionError`` if both old_values and new_values are empty
         do not match
+        
+        .. deprecated:: 2.0
+            Use AuditService.create_delta() instead.
         """
-        assert old_values or new_values, \
-            "Must provide a non-empty value for either old_values or new_values"
-
-        changed_fields = old_values.keys() if old_values else new_values.keys()
-        if old_values and new_values:
-            changed_fields = new_values.keys()
-
-        delta = {}
-        for field_name in changed_fields:
-            if not old_values:
-                delta[field_name] = {"new": new_values[field_name]}
-            elif not new_values:
-                delta[field_name] = {"old": old_values[field_name]}
-            else:
-                try:
-                    old_value = old_values[field_name]
-                except KeyError:
-                    delta[field_name] = {"new": new_values[field_name]}
-                else:
-                    if old_value != new_values[field_name]:
-                        delta[field_name] = {"old": old_value,
-                                             "new": new_values[field_name]}
-        return delta
+        warnings.warn(
+            "AuditEvent.create_delta() is deprecated. Use AuditService.create_delta() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.create_delta(old_values, new_values)
 
     @classmethod
     def make_audit_event_from_instance(cls, instance, is_create, is_delete,
@@ -433,18 +478,18 @@ class AuditEvent(models.Model):
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             ``instance`` has not changed)
         :raises: ``ValueError`` on invalid use of the ``object_pk`` argument
+        
+        .. deprecated:: 2.0
+            Use AuditService.make_audit_event_from_instance() instead.
         """
-        if not is_delete:
-            if object_pk is not None:
-                raise ValueError(
-                    "'object_pk' arg is ambiguous when 'is_delete == False'"
-                )
-            object_pk = instance.pk
-
-        delta = cls.get_delta_from_instance(instance, is_create, is_delete)
-        if delta:
-            return cls.create_audit_event(object_pk, type(instance), delta,
-                                          is_create, is_delete, request)
+        warnings.warn(
+            "AuditEvent.make_audit_event_from_instance() is deprecated. Use AuditService.make_audit_event_from_instance() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.make_audit_event_from_instance(instance, is_create, is_delete, request, object_pk)
 
     @classmethod
     def make_audit_event_from_values(cls, old_values, new_values, object_pk,
@@ -462,29 +507,33 @@ class AuditEvent(models.Model):
             ``None`` if there is no request)
         :returns: an unsaved ``AuditEvent`` instance (or ``None`` if
             no difference between ``old_values`` and ``new_values``)
+        
+        .. deprecated:: 2.0
+            Use AuditService.make_audit_event_from_values() instead.
         """
-        is_create = not old_values
-        is_delete = not new_values
-        delta = AuditEvent.create_delta(old_values, new_values)
-        if delta:
-            return AuditEvent.create_audit_event(object_pk, object_cls, delta,
-                                                 is_create, is_delete, request)
+        warnings.warn(
+            "AuditEvent.make_audit_event_from_values() is deprecated. Use AuditService.make_audit_event_from_values() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.make_audit_event_from_values(old_values, new_values, object_pk, object_cls, request)
 
     @classmethod
     def create_audit_event(cls, object_pk, object_cls, delta, is_create,
                            is_delete, request):
-        from .auditors import audit_dispatcher
-        from .field_audit import get_audited_class_path
-        change_context = audit_dispatcher.dispatch(request)
-        object_cls_path = get_audited_class_path(object_cls)
-        return cls(
-            object_class_path=object_cls_path,
-            object_pk=object_pk,
-            change_context=cls._change_context_db_value(change_context),
-            is_create=is_create,
-            is_delete=is_delete,
-            delta=delta,
+        """.. deprecated:: 2.0
+            Use AuditService.create_audit_event() instead.
+        """
+        warnings.warn(
+            "AuditEvent.create_audit_event() is deprecated. Use AuditService.create_audit_event() instead.",
+            DeprecationWarning,
+            stacklevel=2
         )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.create_audit_event(object_pk, object_cls, delta, is_create, is_delete, request)
 
     @classmethod
     def bootstrap_existing_model_records(cls, model_class, field_names,
@@ -505,47 +554,18 @@ class AuditEvent(models.Model):
             If ``None`` (the default), ``.all().iterator()`` is called on the
             model's default manager.
         :returns: number of bootstrap records created
+        
+        .. deprecated:: 2.0
+            Use AuditService.bootstrap_existing_model_records() instead.
         """
-        from .auditors import audit_dispatcher
-        from .field_audit import get_audited_class_path
-
-        if iter_records is None:
-            iter_records = model_class._default_manager.all().iterator
-
-        def iter_events():
-            for instance in iter_records():
-                delta = {}
-                for field_name in field_names:
-                    value = cls.get_field_value(
-                        instance, field_name, bootstrap=True
-                    )
-                    delta[field_name] = {"new": value}
-                yield cls(
-                    object_class_path=object_class_path,
-                    object_pk=instance.pk,
-                    change_context=change_context,
-                    is_bootstrap=True,
-                    delta=delta,
-                )
-
-        change_context = cls._change_context_db_value(
-            audit_dispatcher.dispatch(None)
+        warnings.warn(
+            "AuditEvent.bootstrap_existing_model_records() is deprecated. Use AuditService.bootstrap_existing_model_records() instead.",
+            DeprecationWarning,
+            stacklevel=2
         )
-        object_class_path = get_audited_class_path(model_class)
-
-        if batch_size is None:
-            return len(cls.objects.bulk_create(iter_events()))
-        # bulk_create in batches efficiently
-        # see: https://docs.djangoproject.com/en/4.0/ref/models/querysets/#bulk-create  # noqa: E501
-        events = iter_events()
-        total = 0
-        while True:
-            batch = list(islice(events, batch_size))
-            if not batch:
-                break
-            total += len(batch)
-            cls.objects.bulk_create(batch, batch_size=batch_size)
-        return total
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.bootstrap_existing_model_records(model_class, field_names, batch_size, iter_records)
 
     @classmethod
     def bootstrap_top_up(cls, model_class, field_names,
@@ -559,22 +579,18 @@ class AuditEvent(models.Model):
         :param batch_size:  see ``bootstrap_existing_model_records``
             (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
         :returns: number of bootstrap records created
+        
+        .. deprecated:: 2.0
+            Use AuditService.bootstrap_top_up() instead.
         """
-        subquery = (
-            cls.objects
-            .cast_object_pks_list(model_class)
-            .filter(
-                models.Q(models.Q(is_bootstrap=True) | models.Q(is_create=True))
-            )
+        warnings.warn(
+            "AuditEvent.bootstrap_top_up() is deprecated. Use AuditService.bootstrap_top_up() instead.",
+            DeprecationWarning,
+            stacklevel=2
         )
-        # bootstrap the model records who do not match the subquery
-        model_manager = model_class._default_manager
-        return cls.bootstrap_existing_model_records(
-            model_class,
-            field_names,
-            batch_size=batch_size,
-            iter_records=model_manager.exclude(pk__in=subquery).iterator,
-        )
+        from .services import get_audit_service
+        service = get_audit_service()
+        return service.bootstrap_top_up(model_class, field_names, batch_size)
 
     @classmethod
     def _change_context_db_value(cls, value):
@@ -673,9 +689,11 @@ class AuditingQuerySet(models.QuerySet):
         with transaction.atomic(using=self.db):
             created_objs = super().bulk_create(objs, **kw)
             audit_events = []
+            from .services import get_audit_service
+            service = get_audit_service()
             for obj in created_objs:
                 audit_events.append(
-                    AuditEvent.make_audit_event_from_instance(
+                    service.make_audit_event_from_instance(
                         obj, True, False, request))
             AuditEvent.objects.bulk_create(audit_events)
             return created_objs
@@ -695,16 +713,18 @@ class AuditingQuerySet(models.QuerySet):
             return super().delete()
         assert audit_action is AuditAction.AUDIT, audit_action
         from .field_audit import request
+        from .services import get_audit_service
+        service = get_audit_service()
         request = request.get()
         audit_events = []
-        fields_to_fetch = set(AuditEvent.field_names(self.model)) | {'pk'}
+        fields_to_fetch = set(service.get_field_names(self.model)) | {'pk'}
         current_values = {}
         for values_for_instance in self.values(*fields_to_fetch):
             pk = values_for_instance.pop('pk')
             current_values[pk] = values_for_instance
 
         for pk, current_values_for_pk in current_values.items():
-            audit_event = AuditEvent.make_audit_event_from_values(
+            audit_event = service.make_audit_event_from_values(
                 current_values_for_pk,
                 {},
                 pk,
@@ -735,8 +755,10 @@ class AuditingQuerySet(models.QuerySet):
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
 
+        from .services import get_audit_service
+        service = get_audit_service()
         fields_to_update = set(kw.keys())
-        audited_fields = set(AuditEvent.field_names(self.model))
+        audited_fields = set(service.get_field_names(self.model))
         fields_to_audit = fields_to_update & audited_fields
         if not fields_to_audit:
             # no audited fields are changing
@@ -769,7 +791,7 @@ class AuditingQuerySet(models.QuerySet):
             request = request.get()
             audit_events = []
             for pk, old_values_for_pk in old_values.items():
-                audit_event = AuditEvent.make_audit_event_from_values(
+                audit_event = service.make_audit_event_from_values(
                     old_values_for_pk, new_values[pk], pk, self.model, request
                 )
                 if audit_event:

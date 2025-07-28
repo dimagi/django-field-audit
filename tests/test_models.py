@@ -896,7 +896,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
 
     def test_create_rolls_back_if_audit_event_creation_fails(self):
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             SimpleModel.objects.create(id=0)
@@ -908,7 +908,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         self.assertEqual(0, AuditEvent.objects.all().count())
         instance = SimpleModel.objects.create(id=0, value='initial')
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.delete()
@@ -923,7 +923,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         instance = SimpleModel.objects.create(id=0, value='initial')
         instance.value = 'updated'
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.save()
@@ -938,7 +938,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         field_audit.py is behaving as expected
         """
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
@@ -955,7 +955,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         field_audit.py is behaving as expected
         """
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
@@ -1030,7 +1030,7 @@ class TestAuditingQuerySetBulkCreate(TestCase):
             ])
 
     def test_bulk_create_audit_action_audit_rolls_back_if_fails(self):
-        with (patch('field_audit.models.AuditEvent.make_audit_event_from_instance',  # noqa: E501
+        with (patch('field_audit.services.AuditService.make_audit_event_from_instance',  # noqa: E501
                     side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             ModelWithAuditingManager.objects.bulk_create([
@@ -1142,7 +1142,7 @@ class TestAuditingQuerySetUpdate(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.make_audit_event_from_values',  # noqa: E501
+        with (patch('field_audit.services.AuditService.make_audit_event_from_values',  # noqa: E501
                     side_effect=MakeAuditEventFromValuesException()),
               self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.update(value='updated', audit_action=AuditAction.AUDIT)
@@ -1209,7 +1209,7 @@ class TestAuditingQuerySetDelete(TestCase):
         queryset = ModelWithAuditingManager.objects.all()
 
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_values',
+                'field_audit.services.AuditService.make_audit_event_from_values',
                 side_effect=MakeAuditEventFromValuesException()),
               self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.delete(audit_action=AuditAction.AUDIT)
