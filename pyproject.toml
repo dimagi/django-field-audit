@@ -39,9 +39,17 @@ name = "field_audit"
 [tool.uv]
 dev-dependencies = [
     "coverage",
-    "pynose",
+    "pytest",
+    "pytest-cov",
+    "pytest-django",
     "ruff",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+addopts = "--tb=short --strict-markers --strict-config"
+python_files = ["tests.py", "test_*.py", "*_test.py"]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["flit_core >=3.2,<4"]

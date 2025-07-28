@@ -258,7 +258,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Tests
   ```shell
-  uv run nosetests
+  uv run pytest
   ```
 
 - Style check
@@ -268,7 +268,7 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Coverage
   ```shell
-  uv run coverage run -m nose
+  uv run coverage run -m pytest
   uv run coverage report -m
   ```
 
@@ -292,7 +292,6 @@ Publishing is automated with [Github Actions](.github/workflows/pypi.yml).
 - Implement auditing for the remaining "special" QuerySet write operations:
   - `bulk_update()`
 - Write full library documentation using github.io.
-- Switch to `pytest` to support Python 3.10.
 
 ### Backlog
 

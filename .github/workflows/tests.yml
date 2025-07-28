@@ -57,7 +57,7 @@ jobs:
             "HOST":"localhost",
             "PORT":"5432"
           }
-      run: nosetests -v --with-coverage --cover-branches --cover-package=field_audit
+      run: pytest --cov=field_audit --cov-branch -v
       continue-on-error: ${{ matrix.experimental }}
     - name: Check migrations
       run: |

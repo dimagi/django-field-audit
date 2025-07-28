@@ -10,7 +10,7 @@ from .django_setup import destroy_db, init_db  # noqa: E402
 
 
 def setup():
-    """Initialize database for nosetests"""
+    """Initialize database for pytest"""
     init_db()
 
 
