@@ -1,5 +1,9 @@
 # Django Field Audit change log
 
+## v1.3.0 - 2025-07-01
+- Support auditing of many-to-many relationships
+- Use `DjangoJSONEncoder` for serializing change deltas.
+
 ## v1.2.9 - 2025-02-21
 - Don't fail when attempting to use the `who` command to get the current user if the `who` command is not available e.g. on Windows.
 
