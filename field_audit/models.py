@@ -226,10 +226,6 @@ class AuditEvent(models.Model):
             ),
         ]
 
-    ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
-    ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
-    ATTACH_INIT_M2M_VALUES_AT = "__field_audit_init_m2m_values"
-
     @classmethod
     def attach_field_names(cls, model_class, field_names):
         """Attaches a collection of field names to a Model class for auditing.

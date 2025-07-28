@@ -12,6 +12,7 @@ from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from field_audit import AuditService
 from field_audit.auditors import audit_dispatcher
 from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.models import (
@@ -326,7 +327,7 @@ class audit_field_names(ContextDecorator):
         AuditEvent.attach_field_names(self.model_class, self.field_names)
 
     def __exit__(self, *exc):
-        delattr(self.model_class, AuditEvent.ATTACH_FIELD_NAMES_AT)
+        delattr(self.model_class, AuditService.ATTACH_FIELD_NAMES_AT)
 
 
 class TestAuditEvent(TestCase):
@@ -503,13 +504,13 @@ class TestAuditEvent(TestCase):
         AuditEvent.attach_initial_values(instance)
         self.assertEqual(
             {"id": 1, "value": 0},
-            getattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT),
+            getattr(instance, AuditService.ATTACH_INIT_VALUES_AT),
         )
 
     @audit_field_names(TestModel, ["value"])
     def test_attach_initial_values_with_existing_attr_raises(self):
         instance = TestModel()
-        setattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT, None)
+        setattr(instance, AuditService.ATTACH_INIT_VALUES_AT, None)
         with self.assertRaises(AttachValuesError):
             AuditEvent.attach_initial_values(instance)
 
@@ -621,7 +622,7 @@ class TestAuditEvent(TestCase):
         instance.value = 1
         instance.other = 1
         # simulate a missing field
-        del getattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT)["value"]
+        del getattr(instance, AuditService.ATTACH_INIT_VALUES_AT)["value"]
         self.assertAuditTablesEmpty()
         with override_audited_models({TestModel: "TestModel"}):
             AuditEvent.audit_field_changes(instance, False, False, None)

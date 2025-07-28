@@ -12,13 +12,10 @@ class AuditService:
     This class can be subclassed to provide custom audit implementations while
     maintaining backward compatibility with the existing AuditEvent API.
     """
-
-    def __init__(self, audit_event_model):
-        """Initialize the service with the AuditEvent model class to use.
-        
-        :param audit_event_model: The AuditEvent model class (or subclass)
-        """
-        self.audit_event_model = audit_event_model
+    
+    ATTACH_FIELD_NAMES_AT = "__field_audit_field_names"
+    ATTACH_INIT_VALUES_AT = "__field_audit_init_values"
+    ATTACH_INIT_M2M_VALUES_AT = "__field_audit_init_m2m_values"
 
     def attach_field_names(self, model_class, field_names):
         """Attaches a collection of field names to a Model class for auditing.
@@ -26,14 +23,14 @@ class AuditService:
         :param model_class: a Django Model class under audit
         :param field_names: collection of field names to audit on the model
         """
-        setattr(model_class, self.audit_event_model.ATTACH_FIELD_NAMES_AT, field_names)
+        setattr(model_class, self.ATTACH_FIELD_NAMES_AT, field_names)
 
     def get_field_names(self, model_class):
         """Returns the audit field names stored on the audited Model class
 
         :param model_class: a Django Model class under audit
         """
-        return getattr(model_class, self.audit_event_model.ATTACH_FIELD_NAMES_AT)
+        return getattr(model_class, self.ATTACH_FIELD_NAMES_AT)
 
     def get_field_value(self, instance, field_name, bootstrap=False):
         """Returns the database value of a field on ``instance``.
@@ -61,16 +58,16 @@ class AuditService:
         """
         from .models import AttachValuesError
         
-        if hasattr(instance, self.audit_event_model.ATTACH_INIT_VALUES_AT):
+        if hasattr(instance, self.ATTACH_INIT_VALUES_AT):
             # This should never happen, but to be safe, refuse to clobber
             # existing attributes.
             raise AttachValuesError(
-                f"refusing to overwrite {self.audit_event_model.ATTACH_INIT_VALUES_AT!r} "
+                f"refusing to overwrite {self.ATTACH_INIT_VALUES_AT!r} "
                 f"on model instance: {instance}"
             )
         field_names = self.get_field_names(instance)
         init_values = {f: self.get_field_value(instance, f) for f in field_names}
-        setattr(instance, self.audit_event_model.ATTACH_INIT_VALUES_AT, init_values)
+        setattr(instance, self.ATTACH_INIT_VALUES_AT, init_values)
 
     def attach_initial_m2m_values(self, instance, field_name):
         field = instance._meta.get_field(field_name)
@@ -79,23 +76,23 @@ class AuditService:
 
         values = self.get_m2m_field_value(instance, field_name)
         init_values = getattr(
-            instance, self.audit_event_model.ATTACH_INIT_M2M_VALUES_AT, None
+            instance, self.ATTACH_INIT_M2M_VALUES_AT, None
         ) or {}
         init_values.update({field_name: values})
-        setattr(instance, self.audit_event_model.ATTACH_INIT_M2M_VALUES_AT, init_values)
+        setattr(instance, self.ATTACH_INIT_M2M_VALUES_AT, init_values)
 
     def get_initial_m2m_values(self, instance, field_name):
         init_values = getattr(
-            instance, self.audit_event_model.ATTACH_INIT_M2M_VALUES_AT, None
+            instance, self.ATTACH_INIT_M2M_VALUES_AT, None
         ) or {}
         return init_values.get(field_name)
 
     def clear_initial_m2m_field_values(self, instance, field_name):
         init_values = getattr(
-            instance, self.audit_event_model.ATTACH_INIT_M2M_VALUES_AT, None
+            instance, self.ATTACH_INIT_M2M_VALUES_AT, None
         ) or {}
         init_values.pop(field_name, None)
-        setattr(instance, self.audit_event_model.ATTACH_INIT_M2M_VALUES_AT, init_values)
+        setattr(instance, self.ATTACH_INIT_M2M_VALUES_AT, init_values)
 
     def get_m2m_field_value(self, instance, field_name):
         if instance.pk is None:
@@ -117,10 +114,10 @@ class AuditService:
         from .models import AttachValuesError
         
         try:
-            values = getattr(instance, self.audit_event_model.ATTACH_INIT_VALUES_AT)
+            values = getattr(instance, self.ATTACH_INIT_VALUES_AT)
         except AttributeError:
             raise AttachValuesError("cannot reset values that were never set")
-        delattr(instance, self.audit_event_model.ATTACH_INIT_VALUES_AT)
+        delattr(instance, self.ATTACH_INIT_VALUES_AT)
         self.attach_initial_values(instance)
         return values
 
@@ -255,9 +252,10 @@ class AuditService:
                            is_delete, request):
         from .auditors import audit_dispatcher
         from .field_audit import get_audited_class_path
+        from .models import AuditEvent
         change_context = audit_dispatcher.dispatch(request)
         object_cls_path = get_audited_class_path(object_cls)
-        return self.audit_event_model(
+        return AuditEvent(
             object_class_path=object_cls_path,
             object_pk=object_pk,
             change_context=self._change_context_db_value(change_context),
@@ -287,6 +285,7 @@ class AuditService:
         """
         from .auditors import audit_dispatcher
         from .field_audit import get_audited_class_path
+        from .models import AuditEvent
 
         if iter_records is None:
             iter_records = model_class._default_manager.all().iterator
@@ -299,7 +298,7 @@ class AuditService:
                         instance, field_name, bootstrap=True
                     )
                     delta[field_name] = {"new": value}
-                yield self.audit_event_model(
+                yield AuditEvent(
                     object_class_path=object_class_path,
                     object_pk=instance.pk,
                     change_context=change_context,
@@ -313,7 +312,7 @@ class AuditService:
         object_class_path = get_audited_class_path(model_class)
 
         if batch_size is None:
-            return len(self.audit_event_model.objects.bulk_create(iter_events()))
+            return len(AuditEvent.objects.bulk_create(iter_events()))
         # bulk_create in batches efficiently
         # see: https://docs.djangoproject.com/en/4.0/ref/models/querysets/#bulk-create  # noqa: E501
         events = iter_events()
@@ -323,7 +322,7 @@ class AuditService:
             if not batch:
                 break
             total += len(batch)
-            self.audit_event_model.objects.bulk_create(batch, batch_size=batch_size)
+            AuditEvent.objects.bulk_create(batch, batch_size=batch_size)
         return total
 
     def bootstrap_top_up(self, model_class, field_names,
@@ -338,8 +337,10 @@ class AuditService:
             (default=field_audit.const.BOOTSTRAP_BATCH_SIZE)
         :returns: number of bootstrap records created
         """
+        from .models import AuditEvent
+
         subquery = (
-            self.audit_event_model.objects
+            AuditEvent.objects
             .cast_object_pks_list(model_class)
             .filter(
                 models.Q(models.Q(is_bootstrap=True) | models.Q(is_create=True))
@@ -365,7 +366,6 @@ def get_audit_service():
     """
     from django.conf import settings
     from .utils import class_import_helper
-    from .models import AuditEvent
     
     settings_attr = "FIELD_AUDIT_SERVICE_CLASS"
     try:
@@ -374,4 +374,4 @@ def get_audit_service():
     except AttributeError:
         service_class = AuditService
     
-    return service_class(AuditEvent)
+    return service_class()

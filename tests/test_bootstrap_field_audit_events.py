@@ -6,6 +6,7 @@ from django.core.management import CommandError, call_command
 from django.db import models
 from django.test import TestCase
 
+from field_audit import AuditService
 from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.field_audit import get_audited_models
 from field_audit.management.commands import (
@@ -102,7 +103,7 @@ class TestCommand(TestCase):
 
     def test_bootstrap_crashes_early_if_model_has_invalid_fields(self):
         with (
-            patch.object(PkAuto, AuditEvent.ATTACH_FIELD_NAMES_AT, []),
+            patch.object(PkAuto, AuditService.ATTACH_FIELD_NAMES_AT, []),
             self.assertRaises(CommandError),
         ):
             self.quiet_command("init", "PkAuto")
