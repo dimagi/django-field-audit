@@ -38,14 +38,14 @@ jobs:
           --health-retries 5
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-python@v4
+    - uses: astral-sh/setup-uv@v6
       with:
+        version: '>=0.7'
         python-version: ${{ matrix.python }}
     - name: Setup
       run: |
-        python --version
-        pip install --upgrade pip wheel
-        pip install "${{ matrix.django }}" psycopg2-binary pynose flake8 coverage
+        uv sync --locked --dev --no-install-package=django
+        uv pip install "${{ matrix.django }}" psycopg2-binary
     - name: Run tests
       env:
         DB_SETTINGS: >-
@@ -57,14 +57,14 @@ jobs:
             "HOST":"localhost",
             "PORT":"5432"
           }
-      run: nosetests -v --with-coverage --cover-branches --cover-package=field_audit
+      run: uv run pytest --cov=field_audit --cov-branch -v
       continue-on-error: ${{ matrix.experimental }}
     - name: Check migrations
       run: |
-        ./example/manage.py makemigrations field_audit
+        uv run ./example/manage.py makemigrations field_audit
         git add ./field_audit/migrations
         trap 'git reset --hard HEAD' EXIT  # discard changes on exit (needed for continue-on-error)
         git diff --cached --exit-code
       continue-on-error: ${{ matrix.experimental }}
     - name: Check style
-      run: flake8 --config=setup.cfg
+      run: uv run ruff check

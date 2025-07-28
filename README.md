@@ -243,12 +243,11 @@ All feature and bug contributions are expected to be covered by tests.
 
 ### Setup for developers
 
-Create/activate a python virtualenv and install the required dependencies.
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv and then install the project dependencies:
 
 ```shell
 cd django-field-audit
-mkvirtualenv django-field-audit  # or however you choose to setup your environment
-pip install django pynose flake8 coverage
+uv sync
 ```
 
 ### Running tests
@@ -259,18 +258,18 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 
 - Tests
   ```shell
-  nosetests
+  uv run pytest
   ```
 
 - Style check
   ```shell
-  flake8 --config=setup.cfg
+  ruff check
   ```
 
 - Coverage
   ```shell
-  coverage run -m nose
-  coverage report -m
+  uv run coverage run -m pytest
+  uv run coverage report -m
   ```
 
 ### Adding migrations
@@ -278,27 +277,21 @@ your local Python's `sqlite3` library ships with the `JSON1` extension enabled
 The example `manage.py` is available for making new migrations.
 
 ```shell
-python example/manage.py makemigrations field_audit
+uv run python example/manage.py makemigrations field_audit
 ```
 
-### Uploading to PyPI
+### Publishing a new version to PyPI
 
-First bump the package version in the `field_audit/__init__.py` file. Then create a changelog entry in the CHANGELOG.md
-file. After these changes are merged, you should tag the main branch with the new version. Then, package and upload the generated files to PyPI.
+Push a new tag to Github using the format vX.Y.Z where X.Y.Z matches the version
+in [`__init__.py`](field_audit/__init__.py).
 
-```shell
-pip install -r pkg-requires.txt
-
-python setup.py sdist bdist_wheel
-twine upload dist/*
-```
+Publishing is automated with [Github Actions](.github/workflows/pypi.yml).
 
 ## TODO
 
 - Implement auditing for the remaining "special" QuerySet write operations:
   - `bulk_update()`
 - Write full library documentation using github.io.
-- Switch to `pytest` to support Python 3.10.
 
 ### Backlog
 
