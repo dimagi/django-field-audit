@@ -57,7 +57,7 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
             raise AlreadyAudited(cls)
         if not issubclass(cls, models.Model):
             raise ValueError(f"expected Model subclass, got: {cls}")
-        AuditEvent.attach_field_names(cls, field_names)
+        service.attach_field_names(cls, field_names)
         if audit_special_queryset_writes:
             _verify_auditing_manager(cls)
         cls.__init__ = _decorate_init(cls.__init__)
@@ -70,7 +70,8 @@ def audit_fields(*field_names, class_path=None, audit_special_queryset_writes=Fa
         return cls
     if not field_names:
         raise ValueError("at least one field name is required")
-    from .models import AuditEvent
+    from .services import get_audit_service
+    service = get_audit_service()
     return wrapper
 
 
@@ -101,8 +102,9 @@ def _decorate_init(init):
     @wraps(init)
     def wrapper(self, *args, **kw):
         init(self, *args, **kw)
-        AuditEvent.attach_initial_values(self)
-    from .models import AuditEvent
+        service.attach_initial_values(self)
+    from .services import get_audit_service
+    service = get_audit_service()
     return wrapper
 
 
@@ -124,7 +126,7 @@ def _decorate_db_write(func):
         db = router.db_for_write(type(self))
         with transaction.atomic(using=db):
             ret = func(self, *args, **kw)
-            AuditEvent.audit_field_changes(
+            service.audit_field_changes(
                 self,
                 is_create,
                 is_delete,
@@ -136,7 +138,8 @@ def _decorate_db_write(func):
     is_delete = func.__name__ == "delete"
     if not is_save and not is_delete:
         raise ValueError(f"invalid function for decoration: {func}")
-    from .models import AuditEvent
+    from .services import get_audit_service
+    service = get_audit_service()
     return wrapper
 
 
@@ -150,10 +153,11 @@ def _decorate_refresh_from_db(func):
     @wraps(func)
     def wrapper(self, using=None, fields=None, **kwargs):
         if fields is not None:
-            fields = set(fields) | set(AuditEvent.field_names(self))
+            fields = set(fields) | set(service.get_field_names(self))
         func(self, using, fields, **kwargs)
 
-    from .models import AuditEvent
+    from .services import get_audit_service
+    service = get_audit_service()
     return wrapper
 
 
@@ -185,7 +189,9 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
     :param action: A string indicating the type of update
     :param pk_set: For add/remove actions, set of primary key values
     """
-    from .models import AuditEvent
+    from .services import get_audit_service
+
+    service = get_audit_service()
 
     if action not in ('post_add', 'post_remove', 'post_clear', 'pre_clear'):
         return
@@ -206,17 +212,17 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
             field_name = field.name
             break
 
-    if not m2m_field or field_name not in AuditEvent.field_names(instance):
+    if not m2m_field or field_name not in service.get_field_names(instance):
         return
 
     if action == 'pre_clear':
         # `pk_set` not supplied for clear actions. Determine initial values
         # in the `pre_clear` event
-        AuditEvent.attach_initial_m2m_values(instance, field_name)
+        service.attach_initial_m2m_values(instance, field_name)
         return
 
     if action == 'post_clear':
-        initial_values = AuditEvent.get_initial_m2m_values(instance, field_name)
+        initial_values = service.get_initial_m2m_values(instance, field_name)
         if not initial_values:
             return
         delta = {field_name: {'remove': initial_values}}
@@ -228,13 +234,13 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
         delta = {field_name: {delta_key: list(pk_set)}}
 
     req = request.get()
-    event = AuditEvent.create_audit_event(
+    event = service.create_audit_event(
         instance.pk, instance.__class__, delta, False, False, req
     )
     if event is not None:
         event.save()
 
-    AuditEvent.clear_initial_m2m_field_values(instance, field_name)
+    service.clear_initial_m2m_field_values(instance, field_name)
 
 
 def get_audited_models():

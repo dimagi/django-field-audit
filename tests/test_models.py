@@ -12,6 +12,7 @@ from django.db.utils import IntegrityError, DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from field_audit import AuditService
 from field_audit.auditors import audit_dispatcher
 from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.models import (
@@ -326,7 +327,7 @@ class audit_field_names(ContextDecorator):
         AuditEvent.attach_field_names(self.model_class, self.field_names)
 
     def __exit__(self, *exc):
-        delattr(self.model_class, AuditEvent.ATTACH_FIELD_NAMES_AT)
+        delattr(self.model_class, AuditService.ATTACH_FIELD_NAMES_AT)
 
 
 class TestAuditEvent(TestCase):
@@ -503,13 +504,13 @@ class TestAuditEvent(TestCase):
         AuditEvent.attach_initial_values(instance)
         self.assertEqual(
             {"id": 1, "value": 0},
-            getattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT),
+            getattr(instance, AuditService.ATTACH_INIT_VALUES_AT),
         )
 
     @audit_field_names(TestModel, ["value"])
     def test_attach_initial_values_with_existing_attr_raises(self):
         instance = TestModel()
-        setattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT, None)
+        setattr(instance, AuditService.ATTACH_INIT_VALUES_AT, None)
         with self.assertRaises(AttachValuesError):
             AuditEvent.attach_initial_values(instance)
 
@@ -621,7 +622,7 @@ class TestAuditEvent(TestCase):
         instance.value = 1
         instance.other = 1
         # simulate a missing field
-        del getattr(instance, AuditEvent.ATTACH_INIT_VALUES_AT)["value"]
+        del getattr(instance, AuditService.ATTACH_INIT_VALUES_AT)["value"]
         self.assertAuditTablesEmpty()
         with override_audited_models({TestModel: "TestModel"}):
             AuditEvent.audit_field_changes(instance, False, False, None)
@@ -896,7 +897,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
 
     def test_create_rolls_back_if_audit_event_creation_fails(self):
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             SimpleModel.objects.create(id=0)
@@ -908,7 +909,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         self.assertEqual(0, AuditEvent.objects.all().count())
         instance = SimpleModel.objects.create(id=0, value='initial')
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.delete()
@@ -923,7 +924,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         instance = SimpleModel.objects.create(id=0, value='initial')
         instance.value = 'updated'
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             instance.save()
@@ -938,7 +939,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         field_audit.py is behaving as expected
         """
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
@@ -955,7 +956,7 @@ class TestAuditingModelRollbackBehavior(TestCase):
         field_audit.py is behaving as expected
         """
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_instance',
+                'field_audit.services.AuditService.make_audit_event_from_instance',
                 side_effect=MakeAuditEventFromInstanceException()),
               patch('django.db.models.query.transaction',
                     NoopAtomicTransaction()),
@@ -1030,7 +1031,7 @@ class TestAuditingQuerySetBulkCreate(TestCase):
             ])
 
     def test_bulk_create_audit_action_audit_rolls_back_if_fails(self):
-        with (patch('field_audit.models.AuditEvent.make_audit_event_from_instance',  # noqa: E501
+        with (patch('field_audit.services.AuditService.make_audit_event_from_instance',  # noqa: E501
                     side_effect=MakeAuditEventFromInstanceException()),
               self.assertRaises(MakeAuditEventFromInstanceException)):
             ModelWithAuditingManager.objects.bulk_create([
@@ -1142,7 +1143,7 @@ class TestAuditingQuerySetUpdate(TestCase):
         ModelWithAuditingManager.objects.create(id=0, value="initial")
         queryset = ModelWithAuditingManager.objects.all()
 
-        with (patch('field_audit.models.AuditEvent.make_audit_event_from_values',  # noqa: E501
+        with (patch('field_audit.services.AuditService.make_audit_event_from_values',  # noqa: E501
                     side_effect=MakeAuditEventFromValuesException()),
               self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.update(value='updated', audit_action=AuditAction.AUDIT)
@@ -1209,7 +1210,7 @@ class TestAuditingQuerySetDelete(TestCase):
         queryset = ModelWithAuditingManager.objects.all()
 
         with (patch(
-                'field_audit.models.AuditEvent.make_audit_event_from_values',
+                'field_audit.services.AuditService.make_audit_event_from_values',
                 side_effect=MakeAuditEventFromValuesException()),
               self.assertRaises(MakeAuditEventFromValuesException)):
             queryset.delete(audit_action=AuditAction.AUDIT)

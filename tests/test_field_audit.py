@@ -16,7 +16,7 @@ from field_audit.field_audit import (
     get_audited_models,
     request as audit_request,
 )
-from field_audit.models import AuditEvent, AuditingManager
+from field_audit.models import AuditingManager
 
 from .models import (
     Aerodrome,
@@ -88,18 +88,19 @@ class TestFieldAudit(TestCase):
                 def unsupported(self):
                     pass
 
-            with patch.object(AuditEvent, "attach_initial_values") as classmeth:
+            service_path = "field_audit.services.AuditService"
+            with patch(f"{service_path}.attach_initial_values") as meth:
                 item = Item()
-                classmeth.assert_called_once()
-            with patch.object(AuditEvent, "audit_field_changes") as classmeth:
+                meth.assert_called_once()
+            with patch(f"{service_path}.audit_field_changes") as meth:
                 item.save()
-                classmeth.assert_called_once()
-                classmeth.reset_mock()
+                meth.assert_called_once()
+                meth.reset_mock()
                 item.delete()
-                classmeth.assert_called_once()
-                classmeth.reset_mock()
+                meth.assert_called_once()
+                meth.reset_mock()
                 item.unsupported()
-                classmeth.assert_not_called()
+                meth.assert_not_called()
 
     def test_audit_fields_verifies_manager_for_audit_special_queryset_writes(self):  # noqa: E501
 

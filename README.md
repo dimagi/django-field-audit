@@ -65,6 +65,42 @@ FIELD_AUDIT_AUDITORS = []
 |:----------------------------------|:---------------------------------------------------------------|:------------------------
 | `FIELD_AUDIT_AUDITEVENT_MANAGER`  | A custom manager to use for the `AuditEvent` Model.            | `field_audit.models.DefaultAuditEventManager`
 | `FIELD_AUDIT_AUDITORS`            | A custom list of auditors for acquiring `change_context` info. | `["field_audit.auditors.RequestAuditor", "field_audit.auditors.SystemUserAuditor"]`
+| `FIELD_AUDIT_SERVICE_CLASS`       | A custom service class for audit logic implementation.         | `field_audit.services.AuditService`
+
+### Custom Audit Service
+
+The audit logic has been extracted into a separate `AuditService` class to improve separation of concerns and enable easier customization of audit behavior. Users can provide custom audit implementations by subclassing `AuditService` and configuring the `FIELD_AUDIT_SERVICE_CLASS` setting.
+
+#### Creating a Custom Audit Service
+
+```python
+# myapp/audit.py
+
+from field_audit import AuditService
+
+class CustomAuditService(AuditService):
+    def get_field_value(self, instance, field_name, bootstrap=False):
+        # Custom logic for extracting field values
+        value = super().get_field_value(instance, field_name, bootstrap)
+        
+        # Example: custom serialization or transformation
+        if field_name == 'sensitive_field':
+            value = '[REDACTED]'
+            
+        return value
+```
+
+Then configure it in your Django settings:
+
+```python
+# settings.py
+
+FIELD_AUDIT_SERVICE_CLASS = 'myapp.audit.CustomAuditService'
+```
+
+#### Backward Compatibility
+
+The original `AuditEvent` class methods are maintained for backward compatibility but are now deprecated in favor of the service-based approach. These methods will issue deprecation warnings and delegate to the configured audit service.
 
 ### Model Auditing
 

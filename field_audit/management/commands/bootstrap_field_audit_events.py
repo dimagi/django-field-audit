@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from field_audit.const import BOOTSTRAP_BATCH_SIZE
 from field_audit.field_audit import get_audited_models
-from field_audit.models import AuditEvent
+from field_audit.services import get_audit_service
 
 
 class Command(BaseCommand):
@@ -64,6 +64,9 @@ class Command(BaseCommand):
         if batch_size == 0:
             batch_size = None
         self.batch_size = batch_size
+
+        self.service = get_audit_service()
+
         for name in models:
             model_class = self.models[name]
             self.operations[operation](self, model_class)
@@ -74,7 +77,7 @@ class Command(BaseCommand):
         with self.bootstrap_action_log(log_head) as stream:
             count = self.do_bootstrap(
                 model_class,
-                AuditEvent.bootstrap_existing_model_records,
+                self.service.bootstrap_existing_model_records,
                 iter_records=query.iterator,
             )
             stream.write(f"done ({count})")
@@ -82,11 +85,11 @@ class Command(BaseCommand):
     def top_up_missing(self, model_class):
         log_head = f"top-up: {model_class} ... "
         with self.bootstrap_action_log(log_head) as stream:
-            count = self.do_bootstrap(model_class, AuditEvent.bootstrap_top_up)
+            count = self.do_bootstrap(model_class, self.service.bootstrap_top_up)
             stream.write(f"done ({count})")
 
     def do_bootstrap(self, model_class, bootstrap_method, **bootstrap_kw):
-        field_names = AuditEvent.field_names(model_class)
+        field_names = self.service.get_field_names(model_class)
         if not field_names:
             raise CommandError(
                 f"invalid fields ({field_names!r}) for model: {model_class}"
