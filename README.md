@@ -319,7 +319,7 @@ uv run python example/manage.py makemigrations field_audit
 ### Publishing a new version to PyPI
 
 Push a new tag to Github using the format vX.Y.Z where X.Y.Z matches the version
-in [`__init__.py`](field_audit/__init__.py).
+in [`__init__.py`](field_audit/__init__.py). Also ensure that the changelog is up to date.
 
 Publishing is automated with [Github Actions](.github/workflows/pypi.yml).
 
