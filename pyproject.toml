@@ -36,8 +36,8 @@ Repository = "https://github.com/dimagi/django-field-audit"
 [tool.flit.module]
 name = "field_audit"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "coverage",
     "pytest",
     "pytest-cov",
