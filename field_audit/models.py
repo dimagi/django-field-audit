@@ -703,7 +703,10 @@ class AuditingQuerySet(models.QuerySet):
             return super().bulk_create(objs, **kw)
         assert audit_action is AuditAction.AUDIT, audit_action
 
-        from .field_audit import request
+        from .field_audit import is_audit_enabled, request
+        if not is_audit_enabled():
+            return super().bulk_create(objs, **kw)
+
         request = request.get()
 
         with transaction.atomic(using=self.db):
@@ -732,6 +735,11 @@ class AuditingQuerySet(models.QuerySet):
         if audit_action is AuditAction.IGNORE:
             return super().delete()
         assert audit_action is AuditAction.AUDIT, audit_action
+
+        from .field_audit import is_audit_enabled
+        if not is_audit_enabled():
+            return super().delete()
+
         from .field_audit import request
         from .services import get_audit_service
         service = get_audit_service()
@@ -774,6 +782,10 @@ class AuditingQuerySet(models.QuerySet):
         if audit_action is AuditAction.IGNORE:
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
+
+        from .field_audit import is_audit_enabled
+        if not is_audit_enabled():
+            return super().update(**kw)
 
         from .services import get_audit_service
         service = get_audit_service()
