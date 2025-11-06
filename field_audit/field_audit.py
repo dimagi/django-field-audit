@@ -186,6 +186,10 @@ def _decorate_db_write(func):
     """
     @wraps(func)
     def wrapper(self, *args, **kw):
+        # Skip auditing if globally disabled
+        if not is_audit_enabled():
+            return func(self, *args, **kw)
+
         # for details on using 'self._state', see:
         # - https://docs.djangoproject.com/en/dev/ref/models/instances/#state
         # - https://stackoverflow.com/questions/907695/
@@ -258,6 +262,10 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
     :param action: A string indicating the type of update
     :param pk_set: For add/remove actions, set of primary key values
     """
+    # Skip auditing if globally disabled
+    if not is_audit_enabled():
+        return
+
     from .services import get_audit_service
 
     service = get_audit_service()
