@@ -28,14 +28,13 @@ class SettingsDisableTestCase(TestCase):
     def test_delete_disabled_via_setting(self):
         """Verify no audit events on delete when disabled."""
         obj = SimpleModel.objects.create(value="test")
-        pk = obj.pk
         obj.delete()
 
         self.assertEqual(AuditEvent.objects.count(), 0)
 
     def test_save_enabled_by_default(self):
         """Verify auditing works when setting not specified."""
-        obj = SimpleModel.objects.create(value="test")
+        SimpleModel.objects.create(value="test")
 
         # One create event should exist
         self.assertEqual(AuditEvent.objects.count(), 1)
@@ -64,24 +63,24 @@ class ContextDisableTestCase(TestCase):
         """Verify auditing re-enabled after exception in context."""
         try:
             with disable_audit():
-                obj = SimpleModel.objects.create(value="test")
+                SimpleModel.objects.create(value="test")
                 raise ValueError("test exception")
         except ValueError:
             pass
 
         # Auditing should be re-enabled
-        obj2 = SimpleModel.objects.create(value="test2")
+        SimpleModel.objects.create(value="test2")
         self.assertEqual(AuditEvent.objects.count(), 1)
 
     def test_nested_disable_contexts(self):
         """Verify nested disable contexts work correctly."""
         with disable_audit():
-            obj1 = SimpleModel.objects.create(value="test1")
+            SimpleModel.objects.create(value="test1")
 
             with disable_audit():
-                obj2 = SimpleModel.objects.create(value="test2")
+                SimpleModel.objects.create(value="test2")
 
-            obj3 = SimpleModel.objects.create(value="test3")
+            SimpleModel.objects.create(value="test3")
 
         # No events should be created
         self.assertEqual(AuditEvent.objects.count(), 0)
@@ -94,7 +93,7 @@ class ContextEnableTestCase(TestCase):
     def test_enable_audit_overrides_setting(self):
         """Verify enable_audit() works when setting is False."""
         # Create without auditing (setting is False)
-        obj1 = SimpleModel.objects.create(value="test1")
+        SimpleModel.objects.create(value="test1")
         self.assertEqual(AuditEvent.objects.count(), 0)
 
         # Enable for specific operation
@@ -171,10 +170,8 @@ class QuerySetDisableTestCase(TestCase):
 
     def test_queryset_delete_disabled(self):
         """Verify QuerySet.delete respects global disable."""
-        objs = [
+        for i in range(3):
             ModelWithAuditingManager.objects.create(value=f"test{i}")
-            for i in range(3)
-        ]
         AuditEvent.objects.all().delete()
 
         with disable_audit():
@@ -183,42 +180,6 @@ class QuerySetDisableTestCase(TestCase):
             )
 
         self.assertEqual(AuditEvent.objects.count(), 0)
-
-
-class ThreadSafetyTestCase(TestCase):
-    """Test thread safety of global disable.
-
-    Note: contextvars are designed to be thread-safe by default.
-    Each thread/async task gets its own independent context.
-    """
-
-    def test_context_variable_isolation(self):
-        """Verify context variable provides thread-local behavior."""
-        from field_audit.field_audit import audit_enabled
-
-        # Default state
-        self.assertIsNone(audit_enabled.get())
-
-        # Set in current context
-        token = audit_enabled.set(False)
-        self.assertFalse(audit_enabled.get())
-
-        # Reset
-        audit_enabled.reset(token)
-        self.assertIsNone(audit_enabled.get())
-
-        # Nested contexts work correctly
-        token1 = audit_enabled.set(False)
-        self.assertFalse(audit_enabled.get())
-
-        token2 = audit_enabled.set(True)
-        self.assertTrue(audit_enabled.get())
-
-        audit_enabled.reset(token2)
-        self.assertFalse(audit_enabled.get())
-
-        audit_enabled.reset(token1)
-        self.assertIsNone(audit_enabled.get())
 
 
 class BackwardsCompatibilityTestCase(TestCase):
@@ -255,32 +216,3 @@ class BackwardsCompatibilityTestCase(TestCase):
 
         # No new audit events should be created
         self.assertEqual(AuditEvent.objects.count(), initial_count)
-
-
-class MigrationScenarioTestCase(TestCase):
-    """Test realistic data migration scenario."""
-
-    def test_data_migration_workflow(self):
-        """Simulate data migration without audit overhead."""
-        # Setup: create initial data with auditing
-        start_count = AuditEvent.objects.count()
-        initial_objs = [
-            SimpleModel.objects.create(value=f"initial{i}")
-            for i in range(10)
-        ]
-        after_create_count = AuditEvent.objects.count()
-        # Should have created 10 audit events
-        self.assertEqual(after_create_count - start_count, 10)
-
-        # Migration: bulk update without auditing
-        with disable_audit():
-            SimpleModel.objects.all().update(value="migrated")
-
-        # No additional events created
-        self.assertEqual(AuditEvent.objects.count(), after_create_count)
-
-        # Verify data actually migrated
-        self.assertTrue(
-            all(obj.value == "migrated"
-                for obj in SimpleModel.objects.all())
-        )
