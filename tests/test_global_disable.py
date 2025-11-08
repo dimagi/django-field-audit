@@ -2,7 +2,7 @@
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from field_audit import disable_audit, enable_audit
-from field_audit.field_audit import is_audit_enabled
+from field_audit.field_audit import audit_enabled, is_audit_enabled
 from field_audit.models import AuditEvent, AuditAction
 from tests.models import (
     SimpleModel,
@@ -18,6 +18,8 @@ class SettingsDisableTestCase(TestCase):
     @override_settings(FIELD_AUDIT_ENABLED=False)
     def test_save_disabled_via_setting(self):
         """Verify no audit events created when setting is False."""
+        assert audit_enabled.get() is None
+
         obj = SimpleModel.objects.create(value="test")
         obj.value = "updated"
         obj.save()
@@ -28,6 +30,8 @@ class SettingsDisableTestCase(TestCase):
     @override_settings(FIELD_AUDIT_ENABLED=False)
     def test_delete_disabled_via_setting(self):
         """Verify no audit events on delete when disabled."""
+        assert audit_enabled.get() is None
+
         obj = SimpleModel.objects.create(value="test")
         obj.delete()
 
