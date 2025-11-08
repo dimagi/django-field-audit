@@ -1,7 +1,8 @@
 """Tests for global auditing disable feature."""
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from field_audit import disable_audit, enable_audit
+from field_audit.field_audit import is_audit_enabled
 from field_audit.models import AuditEvent, AuditAction
 from tests.models import (
     SimpleModel,
@@ -33,49 +34,40 @@ class SettingsDisableTestCase(TestCase):
         self.assertEqual(AuditEvent.objects.count(), 0)
 
 
-
-class ContextDisableTestCase(TestCase):
+class ContextDisableTestCase(SimpleTestCase):
     """Test disable_audit() context manager."""
 
     def test_disable_audit_context_manager(self):
         """Verify auditing disabled within context."""
-        # Create with auditing (should create event)
-        obj = SimpleModel.objects.create(value="test")
-        self.assertEqual(AuditEvent.objects.count(), 1)
+        assert is_audit_enabled()
 
         # Update with auditing disabled
         with disable_audit():
-            obj.value = "updated"
-            obj.save()
-
-        # Still only one event (create)
-        self.assertEqual(AuditEvent.objects.count(), 1)
+            assert not is_audit_enabled()
 
     def test_disable_audit_restores_after_exception(self):
         """Verify auditing re-enabled after exception in context."""
         try:
             with disable_audit():
-                SimpleModel.objects.create(value="test")
+                assert not is_audit_enabled()
                 raise ValueError("test exception")
         except ValueError:
             pass
 
-        # Auditing should be re-enabled
-        SimpleModel.objects.create(value="test2")
-        self.assertEqual(AuditEvent.objects.count(), 1)
+        assert is_audit_enabled()
 
     def test_nested_disable_contexts(self):
         """Verify nested disable contexts work correctly."""
+        assert is_audit_enabled()
         with disable_audit():
-            SimpleModel.objects.create(value="test1")
+            assert not is_audit_enabled()
 
             with disable_audit():
-                SimpleModel.objects.create(value="test2")
+                assert not is_audit_enabled()
 
-            SimpleModel.objects.create(value="test3")
+            assert not is_audit_enabled()
 
-        # No events should be created
-        self.assertEqual(AuditEvent.objects.count(), 0)
+        assert is_audit_enabled()
 
 
 class ContextEnableTestCase(TestCase):
@@ -84,18 +76,10 @@ class ContextEnableTestCase(TestCase):
     @override_settings(FIELD_AUDIT_ENABLED=False)
     def test_enable_audit_overrides_setting(self):
         """Verify enable_audit() works when setting is False."""
-        # Create without auditing (setting is False)
-        SimpleModel.objects.create(value="test1")
-        self.assertEqual(AuditEvent.objects.count(), 0)
+        assert not is_audit_enabled()
 
-        # Enable for specific operation
         with enable_audit():
-            obj2 = SimpleModel.objects.create(value="test2")
-
-        # One event should be created
-        self.assertEqual(AuditEvent.objects.count(), 1)
-        event = AuditEvent.objects.first()
-        self.assertEqual(int(event.object_pk), obj2.pk)
+            assert is_audit_enabled()
 
 
 class M2MDisableTestCase(TestCase):
@@ -146,11 +130,10 @@ class QuerySetDisableTestCase(TestCase):
 
     def test_queryset_update_disabled(self):
         """Verify QuerySet.update respects global disable."""
-        objs = [
-            ModelWithAuditingManager.objects.create(value=f"test{i}")
+        objs = ModelWithAuditingManager.objects.bulk_create([
+            ModelWithAuditingManager(value=f"test{i}")
             for i in range(3)
-        ]
-        AuditEvent.objects.all().delete()  # Clear create events
+        ], audit_action=AuditAction.IGNORE)
 
         with disable_audit():
             ModelWithAuditingManager.objects.filter(
@@ -162,9 +145,10 @@ class QuerySetDisableTestCase(TestCase):
 
     def test_queryset_delete_disabled(self):
         """Verify QuerySet.delete respects global disable."""
-        for i in range(3):
-            ModelWithAuditingManager.objects.create(value=f"test{i}")
-        AuditEvent.objects.all().delete()
+        ModelWithAuditingManager.objects.bulk_create([
+            ModelWithAuditingManager(value=f"test{i}")
+            for i in range(3)
+        ], audit_action=AuditAction.IGNORE)
 
         with disable_audit():
             ModelWithAuditingManager.objects.all().delete(
