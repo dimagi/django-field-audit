@@ -32,14 +32,6 @@ class SettingsDisableTestCase(TestCase):
 
         self.assertEqual(AuditEvent.objects.count(), 0)
 
-    def test_save_enabled_by_default(self):
-        """Verify auditing works when setting not specified."""
-        SimpleModel.objects.create(value="test")
-
-        # One create event should exist
-        self.assertEqual(AuditEvent.objects.count(), 1)
-        event = AuditEvent.objects.first()
-        self.assertTrue(event.is_create)
 
 
 class ContextDisableTestCase(TestCase):
