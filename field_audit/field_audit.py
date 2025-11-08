@@ -39,6 +39,7 @@ def is_audit_enabled():
     return getattr(settings, 'FIELD_AUDIT_ENABLED', True)
 
 
+@contextmanager
 def disable_audit():
     """
     Context manager to temporarily disable auditing.
@@ -51,17 +52,14 @@ def disable_audit():
             obj.save()
             MyModel.objects.bulk_create(objects)
     """
-    @contextmanager
-    def _context():
-        token = audit_enabled.set(False)
-        try:
-            yield
-        finally:
-            audit_enabled.reset(token)
-
-    return _context()
+    token = audit_enabled.set(False)
+    try:
+        yield
+    finally:
+        audit_enabled.reset(token)
 
 
+@contextmanager
 def enable_audit():
     """
     Context manager to explicitly enable auditing.
@@ -69,15 +67,11 @@ def enable_audit():
     Useful when FIELD_AUDIT_ENABLED=False but you need auditing
     for a specific block of code.
     """
-    @contextmanager
-    def _context():
-        token = audit_enabled.set(True)
-        try:
-            yield
-        finally:
-            audit_enabled.reset(token)
-
-    return _context()
+    token = audit_enabled.set(True)
+    try:
+        yield
+    finally:
+        audit_enabled.reset(token)
 
 
 class AlreadyAudited(Exception):
