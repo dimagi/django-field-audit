@@ -1,6 +1,8 @@
 import contextvars
+from contextlib import contextmanager
 from functools import wraps
 
+from django.conf import settings
 from django.db import models, router, transaction
 from django.db.models.signals import m2m_changed
 
@@ -28,8 +30,6 @@ def is_audit_enabled():
     Returns True if auditing should proceed, False if disabled.
     Checks context variable first, then falls back to Django setting.
     """
-    from django.conf import settings
-
     # Check context variable first (runtime override)
     ctx_value = audit_enabled.get()
     if ctx_value is not None:
@@ -51,8 +51,6 @@ def disable_audit():
             obj.save()
             MyModel.objects.bulk_create(objects)
     """
-    from contextlib import contextmanager
-
     @contextmanager
     def _context():
         token = audit_enabled.set(False)
@@ -71,8 +69,6 @@ def enable_audit():
     Useful when FIELD_AUDIT_ENABLED=False but you need auditing
     for a specific block of code.
     """
-    from contextlib import contextmanager
-
     @contextmanager
     def _context():
         token = audit_enabled.set(True)
