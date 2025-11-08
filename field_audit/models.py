@@ -8,8 +8,11 @@ from django.db import models, transaction
 from django.db.models import Expression
 from django.utils import timezone
 
+from . import get_audit_service
 from .const import BOOTSTRAP_BATCH_SIZE
+from .global_context import is_audit_enabled
 from .utils import class_import_helper
+from .field_audit import get_audited_class_path, request
 
 USER_TYPE_TTY = "SystemTtyOwner",
 USER_TYPE_PROCESS = "SystemProcessOwner"
@@ -51,7 +54,6 @@ class AuditEventManager(models.Manager):
         :param model_class: an audited Django model class
         :returns: ``QuerySet``
         """
-        from .field_audit import get_audited_class_path
         return self.filter(
             object_class_path=get_audited_class_path(model_class)
         )
@@ -241,7 +243,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.attach_field_names(model_class, field_names)
 
@@ -260,7 +261,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.get_field_names(model_class)
 
@@ -280,7 +280,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.get_field_value(instance, field_name, bootstrap)
 
@@ -303,7 +302,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.attach_initial_values(instance)
 
@@ -318,7 +316,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.attach_initial_m2m_values(instance, field_name)
 
@@ -333,7 +330,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.get_initial_m2m_values(instance, field_name)
 
@@ -348,7 +344,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.clear_initial_m2m_field_values(instance, field_name)
 
@@ -363,7 +358,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.get_m2m_field_value(instance, field_name)
 
@@ -385,7 +379,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.reset_initial_values(instance)
 
@@ -406,7 +399,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.audit_field_changes(*args, **kw)
 
@@ -435,7 +427,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.get_delta_from_instance(instance, is_create, is_delete)
 
@@ -461,7 +452,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2,
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.create_delta(old_values, new_values)
 
@@ -495,7 +485,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.make_audit_event_from_instance(
             instance, is_create, is_delete, request, object_pk
@@ -527,7 +516,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.make_audit_event_from_values(
             old_values, new_values, object_pk, object_cls, request
@@ -545,7 +533,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.create_audit_event(
             object_pk, object_cls, delta, is_create, is_delete, request
@@ -580,7 +567,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.bootstrap_existing_model_records(
             model_class, field_names, batch_size, iter_records
@@ -608,7 +594,6 @@ class AuditEvent(models.Model):
             DeprecationWarning,
             stacklevel=2
         )
-        from .services import get_audit_service
         service = get_audit_service()
         return service.bootstrap_top_up(model_class, field_names, batch_size)
 
@@ -703,21 +688,19 @@ class AuditingQuerySet(models.QuerySet):
             return super().bulk_create(objs, **kw)
         assert audit_action is AuditAction.AUDIT, audit_action
 
-        from .field_audit import is_audit_enabled, request
         if not is_audit_enabled():
             return super().bulk_create(objs, **kw)
 
-        request = request.get()
+        current_request = request.get()
 
         with transaction.atomic(using=self.db):
             created_objs = super().bulk_create(objs, **kw)
             audit_events = []
-            from .services import get_audit_service
             service = get_audit_service()
             for obj in created_objs:
                 audit_events.append(
                     service.make_audit_event_from_instance(
-                        obj, True, False, request))
+                        obj, True, False, current_request))
             AuditEvent.objects.bulk_create(audit_events)
             return created_objs
 
@@ -736,14 +719,11 @@ class AuditingQuerySet(models.QuerySet):
             return super().delete()
         assert audit_action is AuditAction.AUDIT, audit_action
 
-        from .field_audit import is_audit_enabled
         if not is_audit_enabled():
             return super().delete()
 
-        from .field_audit import request
-        from .services import get_audit_service
         service = get_audit_service()
-        request = request.get()
+        current_request = request.get()
         audit_events = []
         fields_to_fetch = set(service.get_field_names(self.model)) | {'pk'}
         current_values = {}
@@ -757,7 +737,7 @@ class AuditingQuerySet(models.QuerySet):
                 {},
                 pk,
                 self.model,
-                request
+                current_request
             )
             audit_events.append(audit_event)
 
@@ -783,11 +763,9 @@ class AuditingQuerySet(models.QuerySet):
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
 
-        from .field_audit import is_audit_enabled
         if not is_audit_enabled():
             return super().update(**kw)
 
-        from .services import get_audit_service
         service = get_audit_service()
         fields_to_update = set(kw.keys())
         audited_fields = set(service.get_field_names(self.model))
@@ -819,12 +797,11 @@ class AuditingQuerySet(models.QuerySet):
                 new_values = {pk: new_values for pk in old_values.keys()}
 
             # create and write the audit events _after_ the update succeeds
-            from .field_audit import request
-            request = request.get()
+            current_request = request.get()
             audit_events = []
             for pk, old_values_for_pk in old_values.items():
                 audit_event = service.make_audit_event_from_values(
-                    old_values_for_pk, new_values[pk], pk, self.model, request
+                    old_values_for_pk, new_values[pk], pk, self.model, current_request
                 )
                 if audit_event:
                     audit_events.append(audit_event)

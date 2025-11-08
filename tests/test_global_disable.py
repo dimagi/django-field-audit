@@ -2,7 +2,7 @@
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from field_audit import disable_audit, enable_audit
-from field_audit.field_audit import audit_enabled, is_audit_enabled
+from field_audit.global_context import audit_enabled, is_audit_enabled
 from field_audit.models import AuditEvent, AuditAction
 from tests.models import (
     SimpleModel,
