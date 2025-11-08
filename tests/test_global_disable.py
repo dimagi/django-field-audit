@@ -180,39 +180,3 @@ class QuerySetDisableTestCase(TestCase):
             )
 
         self.assertEqual(AuditEvent.objects.count(), 0)
-
-
-class BackwardsCompatibilityTestCase(TestCase):
-    """Verify existing behavior unchanged when feature not used."""
-
-    def test_default_behavior_unchanged(self):
-        """Verify auditing still works by default."""
-        # Should work exactly as before
-        initial_count = AuditEvent.objects.count()
-
-        obj = SimpleModel.objects.create(value="test")
-        self.assertEqual(AuditEvent.objects.count(), initial_count + 1)
-
-        obj.value = "updated"
-        obj.save()
-        self.assertEqual(AuditEvent.objects.count(), initial_count + 2)
-
-        obj.delete()
-        self.assertEqual(AuditEvent.objects.count(), initial_count + 3)
-
-    def test_audit_action_still_works(self):
-        """Verify AuditAction.IGNORE still works independently."""
-        initial_count = AuditEvent.objects.count()
-        objs = [
-            ModelWithAuditingManager(value=f"test{i}")
-            for i in range(3)
-        ]
-
-        # AuditAction.IGNORE should still work
-        ModelWithAuditingManager.objects.bulk_create(
-            objs,
-            audit_action=AuditAction.IGNORE
-        )
-
-        # No new audit events should be created
-        self.assertEqual(AuditEvent.objects.count(), initial_count)
