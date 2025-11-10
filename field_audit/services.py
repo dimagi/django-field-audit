@@ -3,6 +3,7 @@ from itertools import islice
 from django.db import models
 
 from .const import BOOTSTRAP_BATCH_SIZE
+from .global_context import is_audit_enabled
 
 
 class AuditService:
@@ -127,7 +128,6 @@ class AuditService:
         All [keyword] arguments are passed directly to
         ``make_audit_event_from_instance()``, see that method for usage.
         """
-        from .field_audit import is_audit_enabled
         if not is_audit_enabled():
             return
 
@@ -253,7 +253,6 @@ class AuditService:
 
     def create_audit_event(self, object_pk, object_cls, delta, is_create,
                            is_delete, request):
-        from .field_audit import is_audit_enabled
         if not is_audit_enabled():
             return None
 
