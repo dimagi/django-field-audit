@@ -684,12 +684,9 @@ class AuditingQuerySet(models.QuerySet):
 
     @validate_audit_action
     def bulk_create(self, objs, *, audit_action=AuditAction.RAISE, **kw):
-        if audit_action is AuditAction.IGNORE or not objs:
+        if audit_action is AuditAction.IGNORE or not is_audit_enabled() or not objs:
             return super().bulk_create(objs, **kw)
         assert audit_action is AuditAction.AUDIT, audit_action
-
-        if not is_audit_enabled():
-            return super().bulk_create(objs, **kw)
 
         current_request = request.get()
 
@@ -715,12 +712,9 @@ class AuditingQuerySet(models.QuerySet):
 
     @validate_audit_action
     def delete(self, *, audit_action=AuditAction.RAISE):
-        if audit_action is AuditAction.IGNORE:
+        if audit_action is AuditAction.IGNORE or not is_audit_enabled():
             return super().delete()
         assert audit_action is AuditAction.AUDIT, audit_action
-
-        if not is_audit_enabled():
-            return super().delete()
 
         service = get_audit_service()
         current_request = request.get()
@@ -759,12 +753,9 @@ class AuditingQuerySet(models.QuerySet):
         NOTE: if django.db.models.Expressions are provided as update arguments,
         an additional fetch of records is performed to obtain new values.
         """
-        if audit_action is AuditAction.IGNORE:
+        if audit_action is AuditAction.IGNORE or not is_audit_enabled():
             return super().update(**kw)
         assert audit_action is AuditAction.AUDIT, audit_action
-
-        if not is_audit_enabled():
-            return super().update(**kw)
 
         service = get_audit_service()
         fields_to_update = set(kw.keys())
