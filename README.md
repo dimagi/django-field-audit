@@ -65,6 +65,7 @@ FIELD_AUDIT_AUDITORS = []
 |:----------------------------------|:---------------------------------------------------------------|:------------------------
 | `FIELD_AUDIT_AUDITEVENT_MANAGER`  | A custom manager to use for the `AuditEvent` Model.            | `field_audit.models.DefaultAuditEventManager`
 | `FIELD_AUDIT_AUDITORS`            | A custom list of auditors for acquiring `change_context` info. | `["field_audit.auditors.RequestAuditor", "field_audit.auditors.SystemUserAuditor"]`
+| `FIELD_AUDIT_ENABLED`             | Global switch to enable/disable all auditing operations.       | `True`
 | `FIELD_AUDIT_SERVICE_CLASS`       | A custom service class for audit logic implementation.         | `field_audit.services.AuditService`
 
 ### Custom Audit Service
@@ -263,6 +264,87 @@ is currently the only way to "top up" bootstrap audit events. Example:
 ```sh
 manage.py bootstrap_field_audit_events top-up Aircraft
 ```
+
+### Disabling Auditing
+
+There are scenarios where you may want to temporarily or globally disable auditing:
+
+1. **Unit Tests**: Improve test performance by disabling audit overhead
+2. **Data Migrations**: Skip auditing during large-scale data operations
+3. **Import Operations**: Avoid creating audit events during bulk data imports
+4. **Maintenance Operations**: Specific operations that shouldn't be tracked
+
+#### Global Disable via Django Setting
+
+To disable auditing for your entire application, set in your Django settings:
+
+```python
+# settings.py
+FIELD_AUDIT_ENABLED = False  # Auditing disabled globally
+```
+
+When this setting is `False`, no audit events will be created anywhere in your application. The default value is `True` (auditing enabled).
+
+#### Runtime Disable via Context Manager
+
+To temporarily disable auditing for a specific block of code:
+
+```python
+from field_audit import disable_audit
+
+# Disable auditing for specific operations
+with disable_audit():
+    obj.field1 = "new value"
+    obj.save()  # No audit event created
+
+    MyModel.objects.bulk_create(objects)  # No audit events
+    obj.m2m_field.add(other_obj)  # No audit event
+
+# Auditing automatically re-enabled after context exits
+obj.save()  # Audit event created (if FIELD_AUDIT_ENABLED=True)
+```
+
+#### Enable Override
+
+You can also temporarily enable auditing even when the global setting is disabled:
+
+```python
+from field_audit import enable_audit
+
+# In settings.py: FIELD_AUDIT_ENABLED = False
+
+# Enable auditing for specific operations
+with enable_audit():
+    obj.save()  # Audit event IS created despite global setting
+```
+
+#### Use Cases
+
+**Unit Tests**: Disable auditing for specific tests to improve performance:
+
+```python
+from field_audit import disable_audit
+
+class MyTestCase(TestCase):
+    def test_without_audit(self):
+        with disable_audit():
+            # Fast test without audit overhead
+            obj = MyModel.objects.create(field1="test")
+            self.assertEqual(obj.field1, "test")
+```
+
+**Data Migrations**: Skip auditing during bulk data operations:
+
+```python
+from field_audit import disable_audit
+
+def migrate_data():
+    with disable_audit():
+        # Bulk operations without creating audit events
+        MyModel.objects.filter(status="old").update(status="new")
+```
+
+**Thread Safety**: The disable mechanism is thread-safe and async-safe, using Python's `contextvars` module. Each thread/coroutine has its own independent state.
 
 ### Using with SQLite
 

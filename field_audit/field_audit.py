@@ -4,11 +4,14 @@ from functools import wraps
 from django.db import models, router, transaction
 from django.db.models.signals import m2m_changed
 
+from .global_context import disable_audit, enable_audit, is_audit_enabled
 from .utils import get_fqcn
 
 __all__ = [
     "AlreadyAudited",
     "audit_fields",
+    "disable_audit",
+    "enable_audit",
     "get_audited_class_path",
     "get_audited_models",
     "request",
@@ -117,6 +120,10 @@ def _decorate_db_write(func):
     """
     @wraps(func)
     def wrapper(self, *args, **kw):
+        # Skip auditing if globally disabled
+        if not is_audit_enabled():
+            return func(self, *args, **kw)
+
         # for details on using 'self._state', see:
         # - https://docs.djangoproject.com/en/dev/ref/models/instances/#state
         # - https://stackoverflow.com/questions/907695/
@@ -189,6 +196,10 @@ def _m2m_changed_handler(sender, instance, action, pk_set, **kwargs):
     :param action: A string indicating the type of update
     :param pk_set: For add/remove actions, set of primary key values
     """
+    # Skip auditing if globally disabled
+    if not is_audit_enabled():
+        return
+
     from .services import get_audit_service
 
     service = get_audit_service()
