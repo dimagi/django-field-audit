@@ -1,5 +1,8 @@
 # Django Field Audit change log
 
+## v1.5.0 - 2025-11-13
+- Add support for disabling auditing using the `FIELD_AUDIT_ENABLED` and the `disable_audit` and `enable_audit` context managers.
+
 ## v1.4.0 - 2025-07-29
 - Extract audit logic to the `AuditService` class and allow overriding the class (using the `FIELD_AUDIT_SERVICE_CLASS` setting) to provide custom logic.
 - Update project to use `uv` for dependency management and `ruff` for linting.
