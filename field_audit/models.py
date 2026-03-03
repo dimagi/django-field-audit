@@ -2,6 +2,7 @@ import warnings
 from enum import Enum
 from functools import wraps
 
+import django
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
@@ -13,6 +14,9 @@ from .const import BOOTSTRAP_BATCH_SIZE
 from .global_context import is_audit_enabled
 from .utils import class_import_helper
 from .field_audit import get_audited_class_path, request
+
+# CheckConstraint.condition was added in Django 5.1; .check was removed in 6.0
+_check_constraint_kwarg = "condition" if django.VERSION >= (5, 1) else "check"
 
 USER_TYPE_TTY = ("SystemTtyOwner",)
 USER_TYPE_PROCESS = "SystemProcessOwner"
@@ -219,11 +223,13 @@ class AuditEvent(models.Model):
         constraints = [
             models.CheckConstraint(
                 name="field_audit_auditevent_chk_create_or_delete_or_bootstrap",
-                condition=~(
-                    models.Q(is_create=True, is_delete=True)
-                    | models.Q(is_create=True, is_bootstrap=True)
-                    | models.Q(is_delete=True, is_bootstrap=True)  # noqa: E502
-                ),
+                **{
+                    _check_constraint_kwarg: ~(
+                        models.Q(is_create=True, is_delete=True)
+                        | models.Q(is_create=True, is_bootstrap=True)
+                        | models.Q(is_delete=True, is_bootstrap=True)
+                    )
+                },
             ),
         ]
 
