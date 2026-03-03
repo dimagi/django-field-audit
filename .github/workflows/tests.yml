@@ -12,15 +12,11 @@ jobs:
       fail-fast: false
       matrix:
         python: ['3.10', '3.11', '3.12', '3.13', '3.14']
-        django: ['django==3.2.*', 'django==4.2.*', 'django==5.2.*']
+        django: ['django==4.2.*', 'django==5.2.*']
         experimental: [false]
         exclude:
         - python: '3.14'
-          django: 'django==3.2.*'
-        - python: '3.14'
           django: 'django==4.2.*'
-        - python: '3.13'
-          django: 'django==3.2.*'
         include:
         - python: '3.12'
           django: 'django==6.0.*'
