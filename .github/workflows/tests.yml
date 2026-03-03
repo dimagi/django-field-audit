@@ -12,11 +12,14 @@ jobs:
       fail-fast: false
       matrix:
         python: ['3.9', '3.10', '3.11', '3.12']
-        django: ['django==3.2.*', 'django==4.2.*']
+        django: ['django==3.2.*', 'django==4.2.*', 'django==5.2.*']
         experimental: [false]
+        exclude:
+        - python: '3.9'
+          django: 'django==5.2.*'
         include:
-        - python: '3.10'
-          django: 'https://github.com/django/django/archive/refs/heads/stable/5.0.x.zip#egg=Django'
+        - python: '3.12'
+          django: 'django==6.0.*'
           experimental: true
           # NOTE this job will appear to pass even when it fails because of
           # `continue-on-error: true`. Github Actions apparently does not
