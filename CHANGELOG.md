@@ -1,5 +1,10 @@
 # Django Field Audit change log
 
+## v1.6.0 - 2026-03-04
+- Drop support for Python 3.9 and Django 3.2.
+- Add support for Python 3.13, 3.14, and Django 5.2.
+- Add experimental support for Django 6.0.
+
 ## v1.5.0 - 2025-11-13
 - Add support for disabling auditing using the `FIELD_AUDIT_ENABLED` and the `disable_audit` and `enable_audit` context managers.
 
