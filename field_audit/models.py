@@ -2,6 +2,7 @@ import warnings
 from enum import Enum
 from functools import wraps
 
+import django
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
@@ -14,7 +15,10 @@ from .global_context import is_audit_enabled
 from .utils import class_import_helper
 from .field_audit import get_audited_class_path, request
 
-USER_TYPE_TTY = "SystemTtyOwner",
+# CheckConstraint.condition was added in Django 5.1; .check was removed in 6.0
+_check_constraint_kwarg = "condition" if django.VERSION >= (5, 1) else "check"
+
+USER_TYPE_TTY = ("SystemTtyOwner",)
 USER_TYPE_PROCESS = "SystemProcessOwner"
 USER_TYPE_REQUEST = "RequestUser"
 
@@ -25,11 +29,13 @@ def check_engine_sqlite(engine=None):
 
     :param engine: (Optional) name of a Django database engine.
     """
+
     def lite_it_up(engine):
         # check if engine "flavor" is Oracle or SQLite
         # example db engine: django.db.backends.sqlite3
         # resulting flavor:                     sqlite
         return engine.split(".")[-1][:6] in {"sqlite", "oracle"}
+
     if engine is None:
         for db_properties in settings.DATABASES.values():
             # The following "no branch" directive prevents coverage from
@@ -54,9 +60,7 @@ class AuditEventManager(models.Manager):
         :param model_class: an audited Django model class
         :returns: ``QuerySet``
         """
-        return self.filter(
-            object_class_path=get_audited_class_path(model_class)
-        )
+        return self.filter(object_class_path=get_audited_class_path(model_class))
 
     def cast_object_pk_for_model(self, model_class):
         """Filter records for a specific model and add an ``as_pk_type``
@@ -87,9 +91,8 @@ class AuditEventManager(models.Manager):
         :param flat: optional argument passed to the
             ``values_list()`` method (default=True).
         """
-        return (
-            self.cast_object_pk_for_model(model_class)
-            .values_list("as_pk_type", flat=True)
+        return self.cast_object_pk_for_model(model_class).values_list(
+            "as_pk_type", flat=True
         )
 
     def by_type_and_username(self, user_type, username):
@@ -127,11 +130,12 @@ class AuditEventManager(models.Manager):
                 )
             # "no cover" note: tests only run on postgres _or_ sqlite, never
             # both
-            return self._by_type_and_username(user_type, username)  # pragma: no cover  # noqa: E501
+            return self._by_type_and_username(
+                user_type, username
+            )  # pragma: no cover  # noqa: E501
 
 
 class CastFromJson(models.functions.comparison.Cast):
-
     def __init__(self, expression, output_field):
         super().__init__(JsonPreCast(expression), output_field)
 
@@ -219,11 +223,13 @@ class AuditEvent(models.Model):
         constraints = [
             models.CheckConstraint(
                 name="field_audit_auditevent_chk_create_or_delete_or_bootstrap",
-                check=~(
-                    models.Q(is_create=True, is_delete=True) | \
-                    models.Q(is_create=True, is_bootstrap=True) | \
-                    models.Q(is_delete=True, is_bootstrap=True)  # noqa: E502
-                ),
+                **{
+                    _check_constraint_kwarg: ~(
+                        models.Q(is_create=True, is_delete=True)
+                        | models.Q(is_create=True, is_bootstrap=True)
+                        | models.Q(is_delete=True, is_bootstrap=True)
+                    )
+                },
             ),
         ]
 
@@ -241,7 +247,7 @@ class AuditEvent(models.Model):
             "AuditEvent.attach_field_names() is deprecated. "
             "Use AuditService.attach_field_names() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.attach_field_names(model_class, field_names)
@@ -259,7 +265,7 @@ class AuditEvent(models.Model):
             "AuditEvent.field_names() is deprecated. "
             "Use AuditService.get_field_names() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.get_field_names(model_class)
@@ -278,7 +284,7 @@ class AuditEvent(models.Model):
             "AuditEvent.get_field_value() is deprecated. "
             "Use AuditService.get_field_value() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.get_field_value(instance, field_name, bootstrap)
@@ -300,7 +306,7 @@ class AuditEvent(models.Model):
             "AuditEvent.attach_initial_values() is deprecated. "
             "Use AuditService.attach_initial_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.attach_initial_values(instance)
@@ -308,13 +314,13 @@ class AuditEvent(models.Model):
     @classmethod
     def attach_initial_m2m_values(cls, instance, field_name):
         """.. deprecated:: 1.4
-            Use AuditService.attach_initial_m2m_values() instead.
+        Use AuditService.attach_initial_m2m_values() instead.
         """
         warnings.warn(
             "AuditEvent.attach_initial_m2m_values() is deprecated. "
             "Use AuditService.attach_initial_m2m_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.attach_initial_m2m_values(instance, field_name)
@@ -322,13 +328,13 @@ class AuditEvent(models.Model):
     @classmethod
     def get_initial_m2m_values(cls, instance, field_name):
         """.. deprecated:: 1.4
-            Use AuditService.get_initial_m2m_values() instead.
+        Use AuditService.get_initial_m2m_values() instead.
         """
         warnings.warn(
             "AuditEvent.get_initial_m2m_values() is deprecated. "
             "Use AuditService.get_initial_m2m_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.get_initial_m2m_values(instance, field_name)
@@ -336,13 +342,13 @@ class AuditEvent(models.Model):
     @classmethod
     def clear_initial_m2m_field_values(cls, instance, field_name):
         """.. deprecated:: 1.4
-            Use AuditService.clear_initial_m2m_field_values() instead.
+        Use AuditService.clear_initial_m2m_field_values() instead.
         """
         warnings.warn(
             "AuditEvent.clear_initial_m2m_field_values() is deprecated. "
             "Use AuditService.clear_initial_m2m_field_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.clear_initial_m2m_field_values(instance, field_name)
@@ -350,13 +356,13 @@ class AuditEvent(models.Model):
     @classmethod
     def get_m2m_field_value(cls, instance, field_name):
         """.. deprecated:: 1.4
-            Use AuditService.get_m2m_field_value() instead.
+        Use AuditService.get_m2m_field_value() instead.
         """
         warnings.warn(
             "AuditEvent.get_m2m_field_value() is deprecated. "
             "Use AuditService.get_m2m_field_value() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.get_m2m_field_value(instance, field_name)
@@ -377,7 +383,7 @@ class AuditEvent(models.Model):
             "AuditEvent.reset_initial_values() is deprecated. "
             "Use AuditService.reset_initial_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.reset_initial_values(instance)
@@ -397,7 +403,7 @@ class AuditEvent(models.Model):
             "AuditEvent.audit_field_changes() is deprecated. "
             "Use AuditService.audit_field_changes() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.audit_field_changes(*args, **kw)
@@ -425,7 +431,7 @@ class AuditEvent(models.Model):
             "AuditEvent.get_delta_from_instance() is deprecated. "
             "Use AuditService.get_delta_from_instance() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.get_delta_from_instance(instance, is_create, is_delete)
@@ -456,8 +462,9 @@ class AuditEvent(models.Model):
         return service.create_delta(old_values, new_values)
 
     @classmethod
-    def make_audit_event_from_instance(cls, instance, is_create, is_delete,
-                                       request, object_pk=None):
+    def make_audit_event_from_instance(
+        cls, instance, is_create, is_delete, request, object_pk=None
+    ):
         """Factory method for creating a new ``AuditEvent`` for an instance of a
         model that's being audited for changes.
 
@@ -483,7 +490,7 @@ class AuditEvent(models.Model):
             "AuditEvent.make_audit_event_from_instance() is deprecated. "
             "Use AuditService.make_audit_event_from_instance() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.make_audit_event_from_instance(
@@ -491,8 +498,9 @@ class AuditEvent(models.Model):
         )
 
     @classmethod
-    def make_audit_event_from_values(cls, old_values, new_values, object_pk,
-                                     object_cls, request):
+    def make_audit_event_from_values(
+        cls, old_values, new_values, object_pk, object_cls, request
+    ):
         """Factory method for creating a new ``AuditEvent`` based on old and new
         values.
 
@@ -514,7 +522,7 @@ class AuditEvent(models.Model):
             "AuditEvent.make_audit_event_from_values() is deprecated. "
             "Use AuditService.make_audit_event_from_values() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.make_audit_event_from_values(
@@ -522,16 +530,17 @@ class AuditEvent(models.Model):
         )
 
     @classmethod
-    def create_audit_event(cls, object_pk, object_cls, delta, is_create,
-                           is_delete, request):
+    def create_audit_event(
+        cls, object_pk, object_cls, delta, is_create, is_delete, request
+    ):
         """.. deprecated:: 1.4
-            Use AuditService.create_audit_event() instead.
+        Use AuditService.create_audit_event() instead.
         """
         warnings.warn(
             "AuditEvent.create_audit_event() is deprecated. "
             "Use AuditService.create_audit_event() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.create_audit_event(
@@ -539,9 +548,13 @@ class AuditEvent(models.Model):
         )
 
     @classmethod
-    def bootstrap_existing_model_records(cls, model_class, field_names,
-                                         batch_size=BOOTSTRAP_BATCH_SIZE,
-                                         iter_records=None):
+    def bootstrap_existing_model_records(
+        cls,
+        model_class,
+        field_names,
+        batch_size=BOOTSTRAP_BATCH_SIZE,
+        iter_records=None,
+    ):
         """Creates audit events for all existing records of ``model_class``.
         Database records are fetched and created in batched bulk operations
         for efficiency.
@@ -565,7 +578,7 @@ class AuditEvent(models.Model):
             "AuditEvent.bootstrap_existing_model_records() is deprecated. "
             "Use AuditService.bootstrap_existing_model_records() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.bootstrap_existing_model_records(
@@ -573,8 +586,9 @@ class AuditEvent(models.Model):
         )
 
     @classmethod
-    def bootstrap_top_up(cls, model_class, field_names,
-                         batch_size=BOOTSTRAP_BATCH_SIZE):
+    def bootstrap_top_up(
+        cls, model_class, field_names, batch_size=BOOTSTRAP_BATCH_SIZE
+    ):
         """Creates audit events for existing records of ``model_class`` which
         were created prior to auditing being enabled and are lacking a bootstrap
         or create AuditEvent record.
@@ -592,7 +606,7 @@ class AuditEvent(models.Model):
             "AuditEvent.bootstrap_top_up() is deprecated. "
             "Use AuditService.bootstrap_top_up() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         service = get_audit_service()
         return service.bootstrap_top_up(model_class, field_names, batch_size)
@@ -619,7 +633,6 @@ class UnsetAuditActionError(Exception):
 
 
 class AuditAction(Enum):
-
     AUDIT = object()
     IGNORE = object()
     RAISE = object()
@@ -633,6 +646,7 @@ def validate_audit_action(func):
 
     :raises: ``InvalidAuditActionError`` or ``UnsetAuditActionError``
     """
+
     @wraps(func)
     def wrapper(self, *args, **kw):
         try:
@@ -649,10 +663,10 @@ def validate_audit_action(func):
             )
         if audit_action is AuditAction.RAISE:
             raise UnsetAuditActionError(
-                f"{type(self).__name__}.{func.__name__}() requires an audit "
-                "action"
+                f"{type(self).__name__}.{func.__name__}() requires an audit action"
             )
         return func(self, *args, **kw)
+
     return wrapper
 
 
@@ -697,7 +711,9 @@ class AuditingQuerySet(models.QuerySet):
             for obj in created_objs:
                 audit_events.append(
                     service.make_audit_event_from_instance(
-                        obj, True, False, current_request))
+                        obj, True, False, current_request
+                    )
+                )
             AuditEvent.objects.bulk_create(audit_events)
             return created_objs
 
@@ -719,19 +735,15 @@ class AuditingQuerySet(models.QuerySet):
         service = get_audit_service()
         current_request = request.get()
         audit_events = []
-        fields_to_fetch = set(service.get_field_names(self.model)) | {'pk'}
+        fields_to_fetch = set(service.get_field_names(self.model)) | {"pk"}
         current_values = {}
         for values_for_instance in self.values(*fields_to_fetch):
-            pk = values_for_instance.pop('pk')
+            pk = values_for_instance.pop("pk")
             current_values[pk] = values_for_instance
 
         for pk, current_values_for_pk in current_values.items():
             audit_event = service.make_audit_event_from_values(
-                current_values_for_pk,
-                {},
-                pk,
-                self.model,
-                current_request
+                current_values_for_pk, {}, pk, self.model, current_request
             )
             audit_events.append(audit_event)
 
@@ -767,12 +779,13 @@ class AuditingQuerySet(models.QuerySet):
 
         new_values = {field: kw[field] for field in fields_to_audit}
         uses_expressions = any(
-            [isinstance(val, Expression) for val in new_values.values()])
+            [isinstance(val, Expression) for val in new_values.values()]
+        )
 
         old_values = {}
         values_to_fetch = fields_to_update | {"pk"}
         for value in self.values(*values_to_fetch):
-            pk = value.pop('pk')
+            pk = value.pop("pk")
             old_values[pk] = value
 
         with transaction.atomic(using=self.db):
@@ -782,7 +795,7 @@ class AuditingQuerySet(models.QuerySet):
                 # after update is performed with expressions
                 new_values = {}
                 for value in self.values(*values_to_fetch):
-                    pk = value.pop('pk')
+                    pk = value.pop("pk")
                     new_values[pk] = value
             else:
                 new_values = {pk: new_values for pk in old_values.keys()}
